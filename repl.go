@@ -45,8 +45,10 @@ func startRepl(session *Session) error {
 
 		msg, err := gameCommand.CreatePlayerMessage(commandArgs)
 		if err != nil {
-			return fmt.Errorf("error creating player message from command: %w", err)
+			fmt.Printf("error creating player message from command: %v\n", err)
+			continue
 		}
+		
 		err = session.HandlePlayerMessage(msg)
 		if err != nil {
 			fmt.Println(err)

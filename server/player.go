@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/gorilla/websocket"
 )
@@ -62,12 +63,22 @@ func (p *Player) Run() {
 	for {
 		select {
 		case cm, ok := <-p.clientRead:
+			if !ok {
+				fmt.Println()
+				//error occurred when reading from client
+				//TODO: quit room
+				return
+			}
 			err := p.state.handleClientMessage(cm, ok)
 			if err != nil {
 				fmt.Printf("Error while handling client message: %v\n", err)
 				return
 			}
 		case rm, ok := <-p.room.roomToPlayer:
+			if !ok {
+				//TODO
+				fmt.Println("Room channel closed")
+			}
 			err := p.state.handleRoomMessage(rm, ok)
 			if err != nil {
 				fmt.Printf("Error while handling room message: %v\n", err)
@@ -79,6 +90,7 @@ func (p *Player) Run() {
 
 func (p *Player) readPump() {
 	defer func() {
+		log.Println("Shutting down player.")
 		p.conn.Close()
 		close(p.clientRead)
 	}()
@@ -87,7 +99,7 @@ func (p *Player) readPump() {
 		clientMsg := ClientMessage{}
 		err := p.conn.ReadJSON(&clientMsg)
 		if err != nil {
-			fmt.Printf("Error occured while reading message: %v\n", err)
+			log.Printf("Error occurred while reading message: %v\n", err)
 			return
 		}
 
@@ -109,13 +121,13 @@ func (player *Player) WriteToClient(msg RoomMessage) error {
 		}
 	case RoomGameStarted:
 		serverMsg = ServerMessageGameStarted{
-			Type:   ServerGameStarted,
+			Type: ServerGameStarted,
 			Game: msg.game,
 		}
 	case RoomTurnResult:
 		serverMsg = ServerMessageTurnResult{
-			Type:            ServerTurnResult,
-			Game:          msg.game,
+			Type: ServerTurnResult,
+			Game: msg.game,
 		}
 	default:
 		return fmt.Errorf("unexpected message type: %v", msg.msgType)
@@ -147,7 +159,6 @@ func (state PlayerStateNotInRoom) handleClientMessage(msg ClientMessage, ok bool
 
 		state.player.room = chans
 
-		//send message async to prevent blocking
 		go func(chans RoomChans) {
 			state.player.roomRequests <- RoomRequest{
 				code:  msg.RoomCode,
@@ -155,7 +166,7 @@ func (state PlayerStateNotInRoom) handleClientMessage(msg ClientMessage, ok bool
 			}
 		}(chans)
 
-		fmt.Println("player waiting for room")
+		log.Printf("Player waiting for room. Room code: %v", msg.RoomCode)
 		state.player.setState(state.player.waitingForRoom)
 	default:
 		return fmt.Errorf("unsupported message type while waiting for room: %v", msg.Type)

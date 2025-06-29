@@ -10,34 +10,9 @@ const (
 	ServerTurnResult
 )
 
-type ServerMessage interface {
-	GetType() ServerMessageType
-}
-
-type ServerMessageRoomJoined struct {
-	Type ServerMessageType `json:"type"`
-}
-
-func (m ServerMessageRoomJoined) GetType() ServerMessageType {
-	return m.Type
-}
-
-type ServerMessageGameStarted struct {
+type ServerMessage struct {
 	Type ServerMessageType       `json:"type"`
 	Game tictactoe.TicTacToeGame `json:"game"`
-}
-
-func (m ServerMessageGameStarted) GetType() ServerMessageType {
-	return m.Type
-}
-
-type ServerMessageTurnResult struct {
-	Type ServerMessageType       `json:"type"`
-	Game tictactoe.TicTacToeGame `json:"game"`
-}
-
-func (m ServerMessageTurnResult) GetType() ServerMessageType {
-	return m.Type
 }
 
 type PlayerMessageType int
@@ -53,8 +28,8 @@ type PlayerMessage interface {
 }
 
 type PlayerMessageJoinRoom struct {
-	Type PlayerMessageType `json:"type"`
-	Code string            `json:"code"`
+	Type     PlayerMessageType `json:"type"`
+	RoomCode string            `json:"room_code"`
 }
 
 func (msg PlayerMessageJoinRoom) GetType() PlayerMessageType {

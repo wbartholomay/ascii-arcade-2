@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/gorilla/websocket"
 )
@@ -44,7 +43,7 @@ func (wsDriver *WSDriver) ReadPump() {
 		var msg ServerMessage
 		err := wsDriver.conn.ReadJSON(&msg)
 		if err != nil {
-			log.Printf("An error has occurred while reading from the server, shutting down: %v\n", err)
+			fmt.Printf("An error has occurred while reading from the server, shutting down: %v\n", err)
 			return
 		}
 

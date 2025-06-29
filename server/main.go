@@ -1,14 +1,13 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"net/http"
-
 	// _ "net/http/pprof"
 )
 
 func main() {
-	fmt.Println("Starting server...")
+	log.Println("Starting server...")
 	hub := NewHub()
 	go hub.Run()
 

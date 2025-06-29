@@ -51,8 +51,8 @@ const (
 
 type ClientMessage struct {
 	Type     ClientMessageType `json:"type"`
-	RoomCode string            `json:"roomCode"`
-	Action   TurnAction        `json:"turnAction"`
+	RoomCode string            `json:"room_code"`
+	Action   TurnAction        `json:"turn_action"`
 }
 type TurnAction struct {
 }

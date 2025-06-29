@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 
 	tictactoe "github.com/wbarthol/ascii-arcade-2/internal/tic_tac_toe"
 )
@@ -59,11 +60,10 @@ func (room *Room) Run() {
 		select {
 		//TODO hanlde close requests
 		case joinRequest := <-room.requests:
-			fmt.Println("received room join request")
 			err := room.state.handleJoinRequest(joinRequest)
 			if err != nil {
 				//TODO
-				fmt.Printf("error encountered while handling join request: %v", err)
+				log.Printf("error encountered while handling join request: %v", err)
 				return
 			}
 		case msg := <-room.playerOneChans.playerToRoom:
@@ -88,7 +88,6 @@ func (state RoomStateWaitingForP1) handleJoinRequest(req RoomRequest) error {
 	state.room.SetState(state.room.waitingForPlayerTwo)
 
 	state.room.playerOneChans.roomToPlayer <- RoomMessage{msgType: RoomJoined}
-	fmt.Println("player one joined room")
 	return nil
 }
 

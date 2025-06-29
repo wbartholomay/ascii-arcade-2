@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -38,14 +39,12 @@ func (h *Hub) Run() {
 			room, ok := rooms[msg.code]
 			if !ok {
 				// room = NewRoom(msg.code, closeReq)
-				fmt.Println("Creating new room")
+				log.Printf("Creating new room with code: %v", msg.code)
 				room = NewRoom(msg.code)
 				go room.Run()
 				rooms[msg.code] = room
 			}
-			fmt.Println("player joining room")
 			room.requests <- msg
-			fmt.Println("player joined room")
 		case code := <-closeReq:
 			room, ok := rooms[code]
 			if !ok {
@@ -65,8 +64,8 @@ func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Println("New connection established, creating player.")
 	player := NewPlayer(conn, h.roomRequests)
 
-	fmt.Println("start player goroutine")
 	go player.Run()
 }

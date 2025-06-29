@@ -77,13 +77,14 @@ type SessionStateInMenu struct {
 }
 
 func (state SessionStateInMenu) handleServerMessage(msg ServerMessage) error {
-	switch msg.(type) {
-	case ServerMessageRoomJoined:
+	switch msg.Type {
+	case ServerRoomJoined:
+		fmt.Println("Joining waiting room...")
 		state.session.setState(&state.session.stateWaitingRoom)
 		return nil
 	}
 
-	return fmt.Errorf("unexpected server message type whle in menu: %v", msg.GetType())
+	return fmt.Errorf("unexpected server message type whle in menu: %v", msg.Type)
 }
 
 func (state SessionStateInMenu) handlePlayerMessage(msg PlayerMessage) error {
@@ -100,14 +101,14 @@ type SessionStateWaitingRoom struct {
 }
 
 func (state SessionStateWaitingRoom) handleServerMessage(msg ServerMessage) error {
-	switch m := msg.(type) {
-	case ServerMessageGameStarted:
-		state.session.game = m.Game
+	switch msg.Type {
+	case ServerGameStarted:
+		state.session.game = msg.Game
 		state.session.setState(&state.session.stateInGame)
 		return nil
 	}
 
-	return fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.GetType())
+	return fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.Type)
 }
 
 func (state SessionStateWaitingRoom) handlePlayerMessage(msg PlayerMessage) error {
@@ -125,13 +126,13 @@ type SessionStateInGame struct {
 }
 
 func (state SessionStateInGame) handleServerMessage(msg ServerMessage) error {
-	switch msg.(type) {
-	case ServerMessageTurnResult:
+	switch msg.Type {
+	case ServerTurnResult:
 		//TODO
 		return nil
 	}
 
-	return fmt.Errorf("unexpected server message type whle in game: %v", msg.GetType())
+	return fmt.Errorf("unexpected server message type whle in game: %v", msg.Type)
 }
 
 func (state SessionStateInGame) handlePlayerMessage(msg PlayerMessage) error {

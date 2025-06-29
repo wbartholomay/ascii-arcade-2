@@ -76,6 +76,6 @@ func (cmd CommandJoin) CreatePlayerMessage(args []string) (PlayerMessage, error)
 
 	return PlayerMessageJoinRoom{
 		Type: PlayerJoinRoom,
-		Code: roomCode,
+		RoomCode: roomCode,
 	}, nil
 }
