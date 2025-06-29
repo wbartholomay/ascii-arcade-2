@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gorilla/websocket"
+	"github.com/wbarthol/ascii-arcade-2/internal/messages"
 )
 type WSDriver struct {
 	open bool
@@ -24,6 +25,6 @@ func NewWS(url string) (WSDriver, error) {
 	return ws, nil
 }
 
-func (driver *WSDriver) WriteToServer(msg PlayerMessage) error {
+func (driver *WSDriver) WriteToServer(msg messages.ClientMessage) error {
 	return driver.conn.WriteJSON(msg)
 }

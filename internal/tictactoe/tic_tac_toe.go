@@ -1,6 +1,10 @@
 package tictactoe
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/wbarthol/ascii-arcade-2/internal/vector"
+)
 
 type TicTacToeSquare int
 
@@ -34,6 +38,28 @@ func NewTicTacToeGame() TicTacToeGame {
 	}
 }
 
+func (game TicTacToeGame) ValidateMove(coords vector.Vector) bool {
+	rowInBounds := coords.Y >= 0 && coords.Y <= 2
+	colInBounds := coords.X >= 0 && coords.Y <= 2
+	if (!rowInBounds || !colInBounds) {
+		return false
+	}
+
+	return game.Board[coords.Y][coords.X] == SquareEmpty
+}
+
+// ExecuteTurn - Takes coordinates and a player number, executes turn.
+func (game TicTacToeGame) ExecuteTurn(turn TicTacToeTurn, playerNum int) {
+	coords := turn.Coords
+	playerSquare := SquareX
+	if playerNum == 2 {
+		playerSquare = SquareO
+	}
+
+	game.Board[coords.Y][coords.X] = playerSquare
+	//TODO check for game over
+}
+
 func (game TicTacToeGame) DisplayBoard() {
 	fmt.Println("\n   0   1   2")
 	for i, row := range game.Board {
@@ -62,4 +88,9 @@ func (game TicTacToeGame) DisplayBoard() {
 		}
 	}
 	fmt.Println()
+}
+
+
+type TicTacToeTurn struct {
+	Coords vector.Vector `json:"coords"`
 }

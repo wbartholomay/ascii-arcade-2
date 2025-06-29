@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/wbarthol/ascii-arcade-2/internal/tic_tac_toe"
+
+	"github.com/wbarthol/ascii-arcade-2/internal/messages"
+	"github.com/wbarthol/ascii-arcade-2/internal/tictactoe"
 )
 
 type Session struct {
@@ -11,9 +13,13 @@ type Session struct {
 	stateInGame      SessionStateInGame
 	state            SessionState
 
+	playerNumber int
+	playerTurn   int
+
 	//TODO make this an interface to allow for many game types
 	game tictactoe.TicTacToeGame
 
+	sessionToOutput chan struct{}
 	WSDriver
 }
 
@@ -25,7 +31,8 @@ func StartSession(url string) (*Session, error) {
 	}
 
 	session := Session{
-		WSDriver: wsDriver,
+		sessionToOutput: make(chan struct{}),
+		WSDriver:        wsDriver,
 	}
 
 	session.stateInMenu = SessionStateInMenu{
@@ -50,18 +57,24 @@ func (session *Session) Run() {
 	}()
 
 	for {
-		var msg ServerMessage
+		var msg messages.ServerMessage
 		err := session.conn.ReadJSON(&msg)
 		if err != nil {
 			fmt.Printf("An error has occurred while reading from the server, shutting down: %v\n", err)
 			return
 		}
-		session.state.handleServerMessage(msg)
+		err = session.state.handleServerMessage(msg)
+		if err != nil {
+			fmt.Printf("An error has ocurred while handling the servers message, shutting down: %v\n", err)
+			return
+		}
+
+		session.sessionToOutput <- struct{}{}
 	}
 }
 
-func (session *Session) HandlePlayerMessage(msg PlayerMessage) error {
-	return session.state.handlePlayerMessage(msg)
+func (session *Session) ValidatePlayerMessage(msg messages.ClientMessage) error {
+	return session.state.validatePlayerMessage(msg)
 }
 
 func (session *Session) setState(state SessionState) {
@@ -69,18 +82,19 @@ func (session *Session) setState(state SessionState) {
 }
 
 type SessionState interface {
-	handleServerMessage(msg ServerMessage) error
-	handlePlayerMessage(msg PlayerMessage) error
+	handleServerMessage(msg messages.ServerMessage) error
+	validatePlayerMessage(msg messages.ClientMessage) error
 }
 
 type SessionStateInMenu struct {
 	session *Session
 }
 
-func (state SessionStateInMenu) handleServerMessage(msg ServerMessage) error {
+func (state SessionStateInMenu) handleServerMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
-	case ServerRoomJoined:
+	case messages.ServerRoomJoined:
 		fmt.Println("Joining waiting room...")
+		state.session.playerNumber = msg.PlayerNumber
 		state.session.setState(&state.session.stateWaitingRoom)
 		return nil
 	}
@@ -88,24 +102,26 @@ func (state SessionStateInMenu) handleServerMessage(msg ServerMessage) error {
 	return fmt.Errorf("unexpected server message type whle in menu: %v", msg.Type)
 }
 
-func (state SessionStateInMenu) handlePlayerMessage(msg PlayerMessage) error {
-	switch msg.(type) {
-	case PlayerMessageJoinRoom:
-		return state.session.WriteToServer(msg)
+func (state SessionStateInMenu) validatePlayerMessage(msg messages.ClientMessage) error {
+	switch msg.Type {
+	case messages.ClientJoinRoom:
+		return nil
 	}
 
-	return fmt.Errorf("unexpected player message type while in menu: %v", msg.GetType())
+	return fmt.Errorf("unexpected player message type while in menu: %v", msg.Type)
 }
 
 type SessionStateWaitingRoom struct {
 	session *Session
 }
 
-func (state SessionStateWaitingRoom) handleServerMessage(msg ServerMessage) error {
+func (state SessionStateWaitingRoom) handleServerMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
-	case ServerGameStarted:
+	case messages.ServerGameStarted:
 		fmt.Println("Both players joined, starting game!")
 		state.session.game = msg.Game
+		state.session.playerTurn = msg.PlayerTurn
+		state.session.game.DisplayBoard()
 		state.session.setState(&state.session.stateInGame)
 		return nil
 	}
@@ -113,23 +129,23 @@ func (state SessionStateWaitingRoom) handleServerMessage(msg ServerMessage) erro
 	return fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.Type)
 }
 
-func (state SessionStateWaitingRoom) handlePlayerMessage(msg PlayerMessage) error {
-	switch msg.(type) {
-	case PlayerMessageQuitRoom:
+func (state SessionStateWaitingRoom) validatePlayerMessage(msg messages.ClientMessage) error {
+	switch msg.Type {
+	case messages.ClientQuitRoom:
 		//TODO
 		return nil
 	}
 
-	return fmt.Errorf("unexpected player message type while in waiting room: %v", msg.GetType())
+	return fmt.Errorf("unexpected player message type while in waiting room: %v", msg.Type)
 }
 
 type SessionStateInGame struct {
 	session *Session
 }
 
-func (state SessionStateInGame) handleServerMessage(msg ServerMessage) error {
+func (state SessionStateInGame) handleServerMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
-	case ServerTurnResult:
+	case messages.ServerTurnResult:
 		//TODO
 		return nil
 	}
@@ -137,15 +153,19 @@ func (state SessionStateInGame) handleServerMessage(msg ServerMessage) error {
 	return fmt.Errorf("unexpected server message type whle in game: %v", msg.Type)
 }
 
-func (state SessionStateInGame) handlePlayerMessage(msg PlayerMessage) error {
-	switch msg.(type) {
-	case PlayerMessageQuitRoom:
-		//TODO
+func (state SessionStateInGame) validatePlayerMessage(msg messages.ClientMessage) error {
+
+	switch msg.Type {
+	case messages.ClientSendTurn:
+		if state.session.playerNumber != state.session.playerTurn {
+			return fmt.Errorf("can not send a move on another players turn")
+		}
+
 		return nil
-	case PlayerMessageSendTurn:
-		//TODO
+	case messages.ClientQuitRoom:
+
 		return nil
 	}
 
-	return fmt.Errorf("unexpected player message type while in game: %v", msg.GetType())
+	return fmt.Errorf("unexpected player message type while in game: %v", msg.Type)
 }

@@ -5,6 +5,8 @@ import (
 	"log"
 
 	"github.com/gorilla/websocket"
+	"github.com/wbarthol/ascii-arcade-2/internal/messages"
+	"github.com/wbarthol/ascii-arcade-2/internal/tictactoe"
 )
 
 type PlayerMessageType int
@@ -19,15 +21,15 @@ type RoomChans struct {
 }
 
 type PlayerMessage struct {
-	msgType    PlayerMessageType
-	turnAction TurnAction
-	chans      RoomChans
+	msgType PlayerMessageType
+	turn    tictactoe.TicTacToeTurn
+	chans   RoomChans
 }
 
 type Player struct {
-	notInRoom      PlayerStateNotInRoom
+	notInRoom   PlayerStateNotInRoom
 	waitingRoom PlayerStateWaitingRoom
-	inRoom         PlayerStateInRoom
+	inRoom      PlayerStateInRoom
 	// waitForClose   PlayerStateWaitForClose
 	state PlayerState
 
@@ -35,7 +37,7 @@ type Player struct {
 	wsClosed bool
 
 	roomRequests chan RoomRequest
-	clientRead   chan ClientMessage
+	clientRead   chan messages.ClientMessage
 	room         RoomChans
 
 	done chan struct{}
@@ -45,7 +47,7 @@ func NewPlayer(conn *websocket.Conn, roomRequests chan RoomRequest) *Player {
 	p := Player{
 		conn:         conn,
 		roomRequests: roomRequests,
-		clientRead:   make(chan ClientMessage),
+		clientRead:   make(chan messages.ClientMessage),
 	}
 
 	p.notInRoom = PlayerStateNotInRoom{&p}
@@ -96,7 +98,7 @@ func (p *Player) readPump() {
 	}()
 
 	for {
-		clientMsg := ClientMessage{}
+		clientMsg := messages.ClientMessage{}
 		err := p.conn.ReadJSON(&clientMsg)
 		if err != nil {
 			log.Printf("Error occurred while reading message: %v\n", err)
@@ -112,21 +114,23 @@ func (player *Player) setState(state PlayerState) {
 }
 
 func (player *Player) WriteToClient(msg RoomMessage) error {
-	var serverMsg ServerMessage
+	var serverMsg messages.ServerMessage
 
 	switch msg.msgType {
 	case RoomJoined:
-		serverMsg = ServerMessageRoomJoined{
-			Type: ServerRoomJoined,
+		serverMsg = messages.ServerMessage{
+			Type:         messages.ServerRoomJoined,
+			PlayerNumber: msg.playerNumber,
 		}
 	case RoomGameStarted:
-		serverMsg = ServerMessageGameStarted{
-			Type: ServerGameStarted,
-			Game: msg.game,
+		serverMsg = messages.ServerMessage{
+			Type:       messages.ServerGameStarted,
+			Game:       msg.game,
+			PlayerTurn: msg.playerTurn,
 		}
 	case RoomTurnResult:
-		serverMsg = ServerMessageTurnResult{
-			Type: ServerTurnResult,
+		serverMsg = messages.ServerMessage{
+			Type: messages.ServerTurnResult,
 			Game: msg.game,
 		}
 	default:
@@ -136,7 +140,7 @@ func (player *Player) WriteToClient(msg RoomMessage) error {
 }
 
 type PlayerState interface {
-	handleClientMessage(cm ClientMessage) error
+	handleClientMessage(cm messages.ClientMessage) error
 	handleRoomMessage(rm RoomMessage) error
 }
 
@@ -144,9 +148,9 @@ type PlayerStateNotInRoom struct {
 	player *Player
 }
 
-func (state PlayerStateNotInRoom) handleClientMessage(msg ClientMessage) error {
+func (state PlayerStateNotInRoom) handleClientMessage(msg messages.ClientMessage) error {
 	switch msg.Type {
-	case ClientJoinRoom:
+	case messages.ClientJoinRoom:
 		chans := RoomChans{
 			roomToPlayer: make(chan RoomMessage),
 			playerToRoom: make(chan PlayerMessage),
@@ -192,9 +196,9 @@ type PlayerStateWaitingRoom struct {
 	player *Player
 }
 
-func (state PlayerStateWaitingRoom) handleClientMessage(msg ClientMessage) error {
+func (state PlayerStateWaitingRoom) handleClientMessage(msg messages.ClientMessage) error {
 	switch msg.Type {
-	case ClientQuitRoom:
+	case messages.ClientQuitRoom:
 		//TODO IMPLEMENT QUITTING ROOMS
 	}
 
@@ -209,17 +213,16 @@ func (state PlayerStateWaitingRoom) handleRoomMessage(msg RoomMessage) error {
 			return err
 		}
 	}
-	
+
 	state.player.setState(state.player.inRoom)
 	return nil
 }
-
 
 type PlayerStateInRoom struct {
 	player *Player
 }
 
-func (state PlayerStateInRoom) handleClientMessage(msg ClientMessage) error {
+func (state PlayerStateInRoom) handleClientMessage(msg messages.ClientMessage) error {
 	//TODO
 
 	return nil

@@ -49,9 +49,17 @@ func startRepl(session *Session) error {
 			continue
 		}
 
-		err = session.HandlePlayerMessage(msg)
+		err = session.ValidatePlayerMessage(msg)
 		if err != nil {
 			fmt.Println(err)
+			continue
 		}
+
+		err = session.WriteToServer(msg)
+		if err != nil {
+			return err
+		}
+
+		<- session.sessionToOutput
 	}
 }
