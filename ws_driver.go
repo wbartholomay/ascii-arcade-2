@@ -1,59 +1,47 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/gorilla/websocket"
 )
-
 type WSDriver struct {
 	open bool
 	conn *websocket.Conn
 	//notifier Notifier
 
 	serverToPlayer chan ServerMessage
-	playerToServer chan PlayerMessage
 }
 
-func StartWS(conn *websocket.Conn) *WSDriver{
-	serverToPlayer := make (chan ServerMessage)
-	playerToServer := make (chan PlayerMessage)
+func StartWS(url string) (*WSDriver, error) {
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error dialing websocket: %w", err)
+	}
+
+
+	serverToPlayer := make(chan ServerMessage)
 
 	ws := WSDriver{
-		open: true,
-		conn: conn,
+		open:           true,
+		conn:           conn,
 		serverToPlayer: serverToPlayer,
-		playerToServer: playerToServer,
 	}
 
-	go ws.Run()
+	go ws.ReadPump()
 
-	return &ws
-}
-
-func (wsDriver *WSDriver) Run() {
-	for {
-		select {
-		case serverMsg := <- wsDriver.serverToPlayer:
-			//TODO notify notifier
-			//notifier.Notify()...?
-			//wsDriver.state.handleMsg()...?
-
-
-		case playerMsg := <- wsDriver.playerToServer:
-			//TODO write to server
-		}
-	}
+	return &ws, nil
 }
 
 func (wsDriver *WSDriver) ReadPump() {
-	defer func(){
+	defer func() {
 		wsDriver.conn.Close()
 		//TODO communicate to client that server has closed
 	}()
 
 	for {
-		msg := ServerMessage{}
+		var msg ServerMessage
 		err := wsDriver.conn.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("An error has occurred while reading from the server, shutting down: %v\n", err)
@@ -64,7 +52,10 @@ func (wsDriver *WSDriver) ReadPump() {
 	}
 }
 
-// func (driver *WSDriver) WriteToServer(msg ServerMessage) error {
-// 	return driver.conn.WriteJSON(serverMsg)
-// }
+func (wsDriver *WSDriver) handleMsg(msg ServerMessage) {
 
+}
+
+func (driver *WSDriver) WriteToServer(msg PlayerMessage) error {
+	return driver.conn.WriteJSON(msg)
+}

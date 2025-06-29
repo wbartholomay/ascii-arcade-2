@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+
+	tictactoe "github.com/wbarthol/ascii-arcade-2/internal/tic_tac_toe"
 )
 
 type RoomMessageType int
@@ -16,14 +18,14 @@ const (
 
 type RoomMessage struct {
 	msgType         RoomMessageType
-	game          TicTacToeGame
+	game          tictactoe.TicTacToeGame
 	isPlayerOneTurn bool
 }
 
 type Room struct {
 	code string
 
-	game TicTacToeGame
+	game tictactoe.TicTacToeGame
 
 	waitingForPlayerOne RoomStateWaitingForP1
 	waitingForPlayerTwo RoomStateWaitingForP2
@@ -102,7 +104,7 @@ func (state RoomStateWaitingForP2) handleJoinRequest(req RoomRequest) error {
 	state.room.playerTwoChans = req.chans
 	state.room.playerTwoChans.roomToPlayer <- RoomMessage{msgType: RoomJoined}
 
-	state.room.game = NewTicTacToeGame()
+	state.room.game = tictactoe.NewTicTacToeGame()
 
 	state.room.playerOneChans.roomToPlayer <- RoomMessage{msgType: RoomGameStarted, game: state.room.game}
 	state.room.playerTwoChans.roomToPlayer <- RoomMessage{msgType: RoomGameStarted, game: state.room.game}

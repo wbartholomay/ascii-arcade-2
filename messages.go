@@ -11,7 +11,6 @@ const (
 )
 
 type ServerMessage interface {
-	//using empty function to define server message types
 	GetType() ServerMessageType
 }
 
@@ -41,18 +40,40 @@ func (m ServerMessageTurnResult) GetType() ServerMessageType {
 	return m.Type
 }
 
-type ClientMessageType int
+type PlayerMessageType int
 
 const (
-	ClientJoinRoom ClientMessageType = iota
-	ClientSendTurn
-	ClientQuitRoom
+	PlayerJoinRoom PlayerMessageType = iota
+	PlayerSentTurn
+	PlayerQuitRoom
 )
 
-type ClientMessage struct {
-	Type     ClientMessageType `json:"type"`
-	RoomCode string            `json:"roomCode"`
-	Action   TurnAction        `json:"turnAction"`
+type PlayerMessage interface {
+	GetType() PlayerMessageType
 }
-type TurnAction struct {
+
+type PlayerMessageJoinRoom struct {
+	Type PlayerMessageType `json:"type"`
+	Code string            `json:"code"`
+}
+
+func (msg PlayerMessageJoinRoom) GetType() PlayerMessageType {
+	return msg.Type
+}
+
+type PlayerMessageSendTurn struct {
+	Type PlayerMessageType `json:"type"`
+	//TODO
+}
+
+func (msg PlayerMessageSendTurn) GetType() PlayerMessageType {
+	return msg.Type
+}
+
+type PlayerMessageQuitRoom struct {
+	Type PlayerMessageType `json:"type"`
+}
+
+func (msg PlayerMessageQuitRoom) GetType() PlayerMessageType {
+	return msg.Type
 }
