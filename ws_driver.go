@@ -8,47 +8,20 @@ import (
 type WSDriver struct {
 	open bool
 	conn *websocket.Conn
-	//notifier Notifier
-
-	serverToPlayer chan ServerMessage
 }
 
-func StartWS(url string) (*WSDriver, error) {
+func NewWS(url string) (WSDriver, error) {
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error dialing websocket: %w", err)
+		return WSDriver{}, fmt.Errorf("error dialing websocket: %w", err)
 	}
-
-
-	serverToPlayer := make(chan ServerMessage)
 
 	ws := WSDriver{
 		open:           true,
 		conn:           conn,
-		serverToPlayer: serverToPlayer,
 	}
 
-	go ws.ReadPump()
-
-	return &ws, nil
-}
-
-func (wsDriver *WSDriver) ReadPump() {
-	defer func() {
-		wsDriver.conn.Close()
-		//TODO communicate to client that server has closed
-	}()
-
-	for {
-		var msg ServerMessage
-		err := wsDriver.conn.ReadJSON(&msg)
-		if err != nil {
-			fmt.Printf("An error has occurred while reading from the server, shutting down: %v\n", err)
-			return
-		}
-
-		wsDriver.serverToPlayer <- msg
-	}
+	return ws, nil
 }
 
 func (driver *WSDriver) WriteToServer(msg PlayerMessage) error {

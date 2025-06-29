@@ -26,7 +26,7 @@ type PlayerMessage struct {
 
 type Player struct {
 	notInRoom      PlayerStateNotInRoom
-	waitingForRoom PlayerStateWaitingForRoom
+	waitingRoom PlayerStateWaitingRoom
 	inRoom         PlayerStateInRoom
 	// waitForClose   PlayerStateWaitForClose
 	state PlayerState
@@ -49,7 +49,7 @@ func NewPlayer(conn *websocket.Conn, roomRequests chan RoomRequest) *Player {
 	}
 
 	p.notInRoom = PlayerStateNotInRoom{&p}
-	p.waitingForRoom = PlayerStateWaitingForRoom{&p}
+	p.waitingRoom = PlayerStateWaitingRoom{&p}
 	p.inRoom = PlayerStateInRoom{&p}
 
 	p.state = p.notInRoom
@@ -69,7 +69,7 @@ func (p *Player) Run() {
 				//TODO: quit room
 				return
 			}
-			err := p.state.handleClientMessage(cm, ok)
+			err := p.state.handleClientMessage(cm)
 			if err != nil {
 				fmt.Printf("Error while handling client message: %v\n", err)
 				return
@@ -79,7 +79,7 @@ func (p *Player) Run() {
 				//TODO
 				fmt.Println("Room channel closed")
 			}
-			err := p.state.handleRoomMessage(rm, ok)
+			err := p.state.handleRoomMessage(rm)
 			if err != nil {
 				fmt.Printf("Error while handling room message: %v\n", err)
 				return
@@ -136,20 +136,15 @@ func (player *Player) WriteToClient(msg RoomMessage) error {
 }
 
 type PlayerState interface {
-	handleClientMessage(cm ClientMessage, ok bool) error
-	handleRoomMessage(rm RoomMessage, ok bool) error
+	handleClientMessage(cm ClientMessage) error
+	handleRoomMessage(rm RoomMessage) error
 }
 
 type PlayerStateNotInRoom struct {
 	player *Player
 }
 
-func (state PlayerStateNotInRoom) handleClientMessage(msg ClientMessage, ok bool) error {
-	if !ok {
-		//TODO
-		fmt.Println("SOMETHING WENT WRONG :(")
-	}
-
+func (state PlayerStateNotInRoom) handleClientMessage(msg ClientMessage) error {
 	switch msg.Type {
 	case ClientJoinRoom:
 		chans := RoomChans{
@@ -167,7 +162,6 @@ func (state PlayerStateNotInRoom) handleClientMessage(msg ClientMessage, ok bool
 		}(chans)
 
 		log.Printf("Player waiting for room. Room code: %v", msg.RoomCode)
-		state.player.setState(state.player.waitingForRoom)
 	default:
 		return fmt.Errorf("unsupported message type while waiting for room: %v", msg.Type)
 	}
@@ -175,44 +169,17 @@ func (state PlayerStateNotInRoom) handleClientMessage(msg ClientMessage, ok bool
 	return nil
 }
 
-func (state PlayerStateNotInRoom) handleRoomMessage(msg RoomMessage, ok bool) error {
-	panic("should not receive room message while not in room")
-}
-
-type PlayerStateWaitingForRoom struct {
-	player *Player
-}
-
-func (state PlayerStateWaitingForRoom) handleClientMessage(msg ClientMessage, ok bool) error {
-	if !ok {
-		//TODO
-		fmt.Println("SOMETHING WENT WRONG :(")
-	}
-
-	switch msg.Type {
-	case ClientQuitRoom:
-		//TODO IMPLEMENT QUITTING ROOMS
-	}
-
-	return nil
-}
-
-func (state PlayerStateWaitingForRoom) handleRoomMessage(msg RoomMessage, ok bool) error {
-	if !ok {
-		//TODO
-		fmt.Println("SOMETHING WENT WRONG :(")
-	}
+func (state PlayerStateNotInRoom) handleRoomMessage(msg RoomMessage) error {
 
 	switch msg.msgType {
 	case RoomJoined:
-		//send join notification to client
 		err := state.player.WriteToClient(msg)
 		if err != nil {
 			//TODO handle shutting down clients
 			return err
 		}
 
-		state.player.setState(state.player.inRoom)
+		state.player.setState(state.player.waitingRoom)
 
 	default:
 		return fmt.Errorf("unsupported message type while waiting for room: %v", msg.msgType)
@@ -221,25 +188,44 @@ func (state PlayerStateWaitingForRoom) handleRoomMessage(msg RoomMessage, ok boo
 	return nil
 }
 
+type PlayerStateWaitingRoom struct {
+	player *Player
+}
+
+func (state PlayerStateWaitingRoom) handleClientMessage(msg ClientMessage) error {
+	switch msg.Type {
+	case ClientQuitRoom:
+		//TODO IMPLEMENT QUITTING ROOMS
+	}
+
+	return nil
+}
+
+func (state PlayerStateWaitingRoom) handleRoomMessage(msg RoomMessage) error {
+	switch msg.msgType {
+	case RoomGameStarted:
+		err := state.player.WriteToClient(msg)
+		if err != nil {
+			return err
+		}
+	}
+	
+	state.player.setState(state.player.inRoom)
+	return nil
+}
+
+
 type PlayerStateInRoom struct {
 	player *Player
 }
 
-func (state PlayerStateInRoom) handleClientMessage(msg ClientMessage, ok bool) error {
-	if !ok {
-		//TODO
-		fmt.Println("SOMETHING WENT WRONG :(")
-	}
+func (state PlayerStateInRoom) handleClientMessage(msg ClientMessage) error {
 	//TODO
 
 	return nil
 }
 
-func (state PlayerStateInRoom) handleRoomMessage(msg RoomMessage, ok bool) error {
-	if !ok {
-		//TODO
-		fmt.Println("SOMETHING WENT WRONG :(")
-	}
+func (state PlayerStateInRoom) handleRoomMessage(msg RoomMessage) error {
 	//TODO
 
 	return nil

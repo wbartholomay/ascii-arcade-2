@@ -48,7 +48,7 @@ func startRepl(session *Session) error {
 			fmt.Printf("error creating player message from command: %v\n", err)
 			continue
 		}
-		
+
 		err = session.HandlePlayerMessage(msg)
 		if err != nil {
 			fmt.Println(err)

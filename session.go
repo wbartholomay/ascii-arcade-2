@@ -14,18 +14,18 @@ type Session struct {
 	//TODO make this an interface to allow for many game types
 	game tictactoe.TicTacToeGame
 
-	wsDriver *WSDriver
+	WSDriver
 }
 
 func StartSession(url string) (*Session, error) {
 	//Could move the dialing to StartWS
-	wsDriver, err := StartWS(url)
+	wsDriver, err := NewWS(url)
 	if err != nil {
 		return nil, fmt.Errorf("error starting WS: %w", err)
 	}
 
 	session := Session{
-		wsDriver: wsDriver,
+		WSDriver: wsDriver,
 	}
 
 	session.stateInMenu = SessionStateInMenu{
@@ -44,23 +44,24 @@ func StartSession(url string) (*Session, error) {
 }
 
 func (session *Session) Run() {
-	for {
-		serverMsg := <-session.wsDriver.serverToPlayer
-		err := session.state.handleServerMessage(serverMsg)
-		if err != nil {
-			break
-		}
-	}
+	defer func() {
+		session.conn.Close()
+		//TODO communicate to client that server has closed
+	}()
 
-	//TODO shutdown WSDriver
+	for {
+		var msg ServerMessage
+		err := session.conn.ReadJSON(&msg)
+		if err != nil {
+			fmt.Printf("An error has occurred while reading from the server, shutting down: %v\n", err)
+			return
+		}
+		session.state.handleServerMessage(msg)
+	}
 }
 
 func (session *Session) HandlePlayerMessage(msg PlayerMessage) error {
 	return session.state.handlePlayerMessage(msg)
-}
-
-func (session *Session) WriteToServer(msg PlayerMessage) error {
-	return session.wsDriver.WriteToServer(msg)
 }
 
 func (session *Session) setState(state SessionState) {
@@ -103,6 +104,7 @@ type SessionStateWaitingRoom struct {
 func (state SessionStateWaitingRoom) handleServerMessage(msg ServerMessage) error {
 	switch msg.Type {
 	case ServerGameStarted:
+		fmt.Println("Both players joined, starting game!")
 		state.session.game = msg.Game
 		state.session.setState(&state.session.stateInGame)
 		return nil
