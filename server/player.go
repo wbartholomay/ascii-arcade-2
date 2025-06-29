@@ -6,7 +6,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/wbarthol/ascii-arcade-2/internal/messages"
-	"github.com/wbarthol/ascii-arcade-2/internal/tictactoe"
 )
 
 type PlayerMessageType int
@@ -16,14 +15,8 @@ const (
 )
 
 type RoomChans struct {
-	roomToPlayer chan RoomMessage
-	playerToRoom chan PlayerMessage
-}
-
-type PlayerMessage struct {
-	msgType PlayerMessageType
-	turn    tictactoe.TicTacToeTurn
-	chans   RoomChans
+	roomToPlayer chan messages.ServerMessage
+	playerToRoom chan messages.ClientMessage
 }
 
 type Player struct {
@@ -35,6 +28,8 @@ type Player struct {
 
 	conn     *websocket.Conn
 	wsClosed bool
+
+	playerNumber int
 
 	roomRequests chan RoomRequest
 	clientRead   chan messages.ClientMessage
@@ -105,6 +100,7 @@ func (p *Player) readPump() {
 			return
 		}
 
+		log.Printf("Received message from Client: %v\n", clientMsg)
 		p.clientRead <- clientMsg
 	}
 }
@@ -113,35 +109,14 @@ func (player *Player) setState(state PlayerState) {
 	player.state = state
 }
 
-func (player *Player) WriteToClient(msg RoomMessage) error {
-	var serverMsg messages.ServerMessage
-
-	switch msg.msgType {
-	case RoomJoined:
-		serverMsg = messages.ServerMessage{
-			Type:         messages.ServerRoomJoined,
-			PlayerNumber: msg.playerNumber,
-		}
-	case RoomGameStarted:
-		serverMsg = messages.ServerMessage{
-			Type:       messages.ServerGameStarted,
-			Game:       msg.game,
-			PlayerTurn: msg.playerTurn,
-		}
-	case RoomTurnResult:
-		serverMsg = messages.ServerMessage{
-			Type: messages.ServerTurnResult,
-			Game: msg.game,
-		}
-	default:
-		return fmt.Errorf("unexpected message type: %v", msg.msgType)
-	}
-	return player.conn.WriteJSON(serverMsg)
+func (player *Player) WriteToClient(msg messages.ServerMessage) error {
+	log.Printf("Sending message to client %v: %v", player.playerNumber, msg)
+	return player.conn.WriteJSON(msg)
 }
 
 type PlayerState interface {
 	handleClientMessage(cm messages.ClientMessage) error
-	handleRoomMessage(rm RoomMessage) error
+	handleRoomMessage(rm messages.ServerMessage) error
 }
 
 type PlayerStateNotInRoom struct {
@@ -152,8 +127,8 @@ func (state PlayerStateNotInRoom) handleClientMessage(msg messages.ClientMessage
 	switch msg.Type {
 	case messages.ClientJoinRoom:
 		chans := RoomChans{
-			roomToPlayer: make(chan RoomMessage),
-			playerToRoom: make(chan PlayerMessage),
+			roomToPlayer: make(chan messages.ServerMessage),
+			playerToRoom: make(chan messages.ClientMessage),
 		}
 
 		state.player.room = chans
@@ -173,10 +148,11 @@ func (state PlayerStateNotInRoom) handleClientMessage(msg messages.ClientMessage
 	return nil
 }
 
-func (state PlayerStateNotInRoom) handleRoomMessage(msg RoomMessage) error {
+func (state PlayerStateNotInRoom) handleRoomMessage(msg messages.ServerMessage) error {
 
-	switch msg.msgType {
-	case RoomJoined:
+	switch msg.Type {
+	case messages.ServerRoomJoined:
+		state.player.playerNumber = msg.PlayerNumber
 		err := state.player.WriteToClient(msg)
 		if err != nil {
 			//TODO handle shutting down clients
@@ -186,7 +162,7 @@ func (state PlayerStateNotInRoom) handleRoomMessage(msg RoomMessage) error {
 		state.player.setState(state.player.waitingRoom)
 
 	default:
-		return fmt.Errorf("unsupported message type while waiting for room: %v", msg.msgType)
+		return fmt.Errorf("unsupported message type while waiting for room: %v", msg.Type)
 	}
 
 	return nil
@@ -205,9 +181,9 @@ func (state PlayerStateWaitingRoom) handleClientMessage(msg messages.ClientMessa
 	return nil
 }
 
-func (state PlayerStateWaitingRoom) handleRoomMessage(msg RoomMessage) error {
-	switch msg.msgType {
-	case RoomGameStarted:
+func (state PlayerStateWaitingRoom) handleRoomMessage(msg messages.ServerMessage) error {
+	switch msg.Type {
+	case messages.ServerGameStarted:
 		err := state.player.WriteToClient(msg)
 		if err != nil {
 			return err
@@ -223,13 +199,27 @@ type PlayerStateInRoom struct {
 }
 
 func (state PlayerStateInRoom) handleClientMessage(msg messages.ClientMessage) error {
-	//TODO
+	switch msg.Type {
+	case messages.ClientSendTurn:
+		state.player.room.playerToRoom <- msg
+	default:
+		return fmt.Errorf("unsupported message type while in room: %v", msg.Type)
+
+	}
 
 	return nil
 }
 
-func (state PlayerStateInRoom) handleRoomMessage(msg RoomMessage) error {
-	//TODO
+func (state PlayerStateInRoom) handleRoomMessage(msg messages.ServerMessage) error {
+	switch msg.Type {
+	case messages.ServerTurnResult:
+		err := state.player.WriteToClient(msg)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported message type while in room: %v", msg.Type)
+	}
 
 	return nil
 }

@@ -38,10 +38,10 @@ func NewTicTacToeGame() TicTacToeGame {
 	}
 }
 
-func (game TicTacToeGame) ValidateMove(coords vector.Vector) bool {
+func (game *TicTacToeGame) ValidateMove(coords vector.Vector) bool {
 	rowInBounds := coords.Y >= 0 && coords.Y <= 2
 	colInBounds := coords.X >= 0 && coords.Y <= 2
-	if (!rowInBounds || !colInBounds) {
+	if !rowInBounds || !colInBounds {
 		return false
 	}
 
@@ -49,7 +49,7 @@ func (game TicTacToeGame) ValidateMove(coords vector.Vector) bool {
 }
 
 // ExecuteTurn - Takes coordinates and a player number, executes turn.
-func (game TicTacToeGame) ExecuteTurn(turn TicTacToeTurn, playerNum int) {
+func (game *TicTacToeGame) ExecuteTurn(turn TicTacToeTurn, playerNum int) {
 	coords := turn.Coords
 	playerSquare := SquareX
 	if playerNum == 2 {
@@ -60,10 +60,12 @@ func (game TicTacToeGame) ExecuteTurn(turn TicTacToeTurn, playerNum int) {
 	//TODO check for game over
 }
 
-func (game TicTacToeGame) DisplayBoard() {
-	fmt.Println("\n   0   1   2")
+func (game *TicTacToeGame) DisplayBoard() string {
+	var result string
+	result += "\n   0   1   2\n"
+
 	for i, row := range game.Board {
-		fmt.Printf("%d ", i)
+		result += fmt.Sprintf("%d ", i)
 		for j, square := range row {
 			var symbol string
 			switch square {
@@ -76,20 +78,20 @@ func (game TicTacToeGame) DisplayBoard() {
 			}
 
 			if j < len(row)-1 {
-				fmt.Printf(" %s |", symbol)
+				result += fmt.Sprintf(" %s |", symbol)
 			} else {
-				fmt.Printf(" %s ", symbol)
+				result += fmt.Sprintf(" %s ", symbol)
 			}
 		}
-		fmt.Println()
+		result += "\n"
 
 		if i < len(game.Board)-1 {
-			fmt.Println("  ---|---|---")
+			result += "  ---|---|---\n"
 		}
 	}
-	fmt.Println()
+	result += "\n"
+	return result
 }
-
 
 type TicTacToeTurn struct {
 	Coords vector.Vector `json:"coords"`

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/wbarthol/ascii-arcade-2/internal/messages"
 	"github.com/wbarthol/ascii-arcade-2/internal/tictactoe"
@@ -19,7 +20,7 @@ type Session struct {
 	//TODO make this an interface to allow for many game types
 	game tictactoe.TicTacToeGame
 
-	sessionToOutput chan struct{}
+	sessionToOutput chan string
 	WSDriver
 }
 
@@ -31,7 +32,7 @@ func StartSession(url string) (*Session, error) {
 	}
 
 	session := Session{
-		sessionToOutput: make(chan struct{}),
+		sessionToOutput: make(chan string),
 		WSDriver:        wsDriver,
 	}
 
@@ -50,6 +51,19 @@ func StartSession(url string) (*Session, error) {
 	return &session, nil
 }
 
+func (session Session) isPlayerTurn() bool {
+	return session.playerNumber == session.playerTurn
+}
+
+func (session *Session) displayBoardToUser() {
+	session.sessionToOutput <- session.game.DisplayBoard()
+	if session.isPlayerTurn() {
+		session.sessionToOutput <- "Your turn, make a move."
+	} else {
+		session.sessionToOutput <- "Waiting on opponents move..."
+	}
+}
+
 func (session *Session) Run() {
 	defer func() {
 		session.conn.Close()
@@ -63,13 +77,12 @@ func (session *Session) Run() {
 			fmt.Printf("An error has occurred while reading from the server, shutting down: %v\n", err)
 			return
 		}
+		log.Printf("Received message from server: %v\n", msg)
 		err = session.state.handleServerMessage(msg)
 		if err != nil {
 			fmt.Printf("An error has ocurred while handling the servers message, shutting down: %v\n", err)
 			return
 		}
-
-		session.sessionToOutput <- struct{}{}
 	}
 }
 
@@ -118,10 +131,10 @@ type SessionStateWaitingRoom struct {
 func (state SessionStateWaitingRoom) handleServerMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
 	case messages.ServerGameStarted:
-		fmt.Println("Both players joined, starting game!")
+		fmt.Println("Both players joined, starting game!\n> ")
 		state.session.game = msg.Game
 		state.session.playerTurn = msg.PlayerTurn
-		state.session.game.DisplayBoard()
+		state.session.displayBoardToUser()
 		state.session.setState(&state.session.stateInGame)
 		return nil
 	}
@@ -146,7 +159,9 @@ type SessionStateInGame struct {
 func (state SessionStateInGame) handleServerMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
 	case messages.ServerTurnResult:
-		//TODO
+		state.session.game = msg.Game
+		state.session.playerTurn = msg.PlayerTurn
+		state.session.displayBoardToUser()
 		return nil
 	}
 

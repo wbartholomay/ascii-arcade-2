@@ -5,24 +5,9 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/wbarthol/ascii-arcade-2/internal/messages"
 	"github.com/wbarthol/ascii-arcade-2/internal/tictactoe"
 )
-
-type RoomMessageType int
-
-const (
-	RoomJoined RoomMessageType = iota
-	RoomGameStarted
-	RoomTurnResult
-	RoomGameFinished
-)
-
-type RoomMessage struct {
-	msgType      RoomMessageType
-	game         tictactoe.TicTacToeGame
-	playerNumber int
-	playerTurn   int
-}
 
 type Room struct {
 	code string
@@ -86,7 +71,7 @@ func (room *Room) Run() {
 
 type RoomState interface {
 	handleJoinRequest(req RoomRequest) error
-	handlePlayerMessage(msg PlayerMessage, playerNumber int) error
+	handlePlayerMessage(msg messages.ClientMessage, playerNumber int) error
 }
 
 type RoomStateWaitingForP1 struct {
@@ -97,14 +82,14 @@ func (state RoomStateWaitingForP1) handleJoinRequest(req RoomRequest) error {
 	state.room.playerOneChans = req.chans
 	state.room.SetState(state.room.waitingForPlayerTwo)
 
-	state.room.playerOneChans.roomToPlayer <- RoomMessage{
-		msgType:      RoomJoined,
-		playerNumber: 1,
+	state.room.playerOneChans.roomToPlayer <- messages.ServerMessage{
+		Type:         messages.ServerRoomJoined,
+		PlayerNumber: 1,
 	}
 	return nil
 }
 
-func (state RoomStateWaitingForP1) handlePlayerMessage(msg PlayerMessage, playerNumber int) error {
+func (state RoomStateWaitingForP1) handlePlayerMessage(msg messages.ClientMessage, playerNumber int) error {
 	panic("should be no player messages while waiting for p1")
 }
 
@@ -114,23 +99,30 @@ type RoomStateWaitingForP2 struct {
 
 func (state RoomStateWaitingForP2) handleJoinRequest(req RoomRequest) error {
 	state.room.playerTwoChans = req.chans
-	state.room.playerTwoChans.roomToPlayer <- RoomMessage{
-		msgType:      RoomJoined,
-		playerNumber: 2,
+	state.room.playerTwoChans.roomToPlayer <- messages.ServerMessage{
+		Type:         messages.ServerRoomJoined,
+		PlayerNumber: 2,
 	}
 
 	state.room.game = tictactoe.NewTicTacToeGame()
 	state.room.playerTurn = 1
 
-	state.room.playerOneChans.roomToPlayer <- RoomMessage{msgType: RoomGameStarted, game: state.room.game, playerTurn: 1}
-	state.room.playerTwoChans.roomToPlayer <- RoomMessage{msgType: RoomGameStarted, game: state.room.game, playerTurn: 1}
+	state.room.playerOneChans.roomToPlayer <- messages.ServerMessage{Type: messages.ServerGameStarted,
+		Game:       state.room.game,
+		PlayerTurn: 1,
+	}
+	state.room.playerTwoChans.roomToPlayer <- messages.ServerMessage{
+		Type:       messages.ServerGameStarted,
+		Game:       state.room.game,
+		PlayerTurn: 1,
+	}
 
 	state.room.SetState(state.room.running)
-	log.Println("Player two joined room")
+	log.Println("Player two joined room, game started!")
 	return nil
 }
 
-func (state RoomStateWaitingForP2) handlePlayerMessage(msg PlayerMessage, playerNumber int) error {
+func (state RoomStateWaitingForP2) handlePlayerMessage(msg messages.ClientMessage, playerNumber int) error {
 	if playerNumber != 2 {
 		//TODO handle this better than panicking
 		panic("should be no messages from player two while waiting for p2")
@@ -148,27 +140,27 @@ func (state RoomStateRunning) handleJoinRequest(req RoomRequest) error {
 	return errors.New("room is already running, can not join")
 }
 
-func (state RoomStateRunning) handlePlayerMessage(msg PlayerMessage, playerNumber int) error {
+func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, playerNumber int) error {
 	if playerNumber != state.room.playerTurn {
 		return fmt.Errorf("received a message from player when it is not their turn")
 	}
 
-	switch msg.msgType {
-	case PlayerSendMove:
+	switch msg.Type {
+	case messages.ClientSendTurn:
 		//TODO need to maintain player turn in gamestate
-		state.room.game.ExecuteTurn(msg.turn, playerNumber)
+		state.room.game.ExecuteTurn(msg.TurnAction, playerNumber)
 		state.room.advanceTurn()
 
-		state.room.playerOneChans.roomToPlayer <- RoomMessage{
-			msgType:    RoomTurnResult,
-			game:       state.room.game,
-			playerTurn: state.room.playerTurn,
-		}
-		state.room.playerTwoChans.roomToPlayer <- RoomMessage{
-			msgType:    RoomTurnResult,
-			game:       state.room.game,
-			playerTurn: state.room.playerTurn,
-		}
+		state.room.playerOneChans.roomToPlayer <- messages.ServerMessage{
+		Type:       messages.ServerTurnResult,
+		Game:       state.room.game,
+		PlayerTurn: state.room.playerTurn,
+	}
+		state.room.playerTwoChans.roomToPlayer <-  messages.ServerMessage{
+		Type:       messages.ServerTurnResult,
+		Game:       state.room.game,
+		PlayerTurn: state.room.playerTurn,
+	}
 	}
 
 	return nil
