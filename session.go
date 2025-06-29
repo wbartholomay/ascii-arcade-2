@@ -55,16 +55,16 @@ func (session *Session) Run() {
 	//TODO shutdown WSDriver
 }
 
+func (session *Session) HandlePlayerMessage(msg PlayerMessage) error {
+	return session.state.handlePlayerMessage(msg)
+}
+
 func (session *Session) WriteToServer(msg PlayerMessage) error {
 	return session.wsDriver.WriteToServer(msg)
 }
 
 func (session *Session) setState(state SessionState) {
 	session.state = state
-}
-
-func (session *Session) handleEvent(event ServerMessage) {
-	session.state.handleServerMessage(event)
 }
 
 type SessionState interface {

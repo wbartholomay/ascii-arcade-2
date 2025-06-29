@@ -52,10 +52,6 @@ func (wsDriver *WSDriver) ReadPump() {
 	}
 }
 
-func (wsDriver *WSDriver) handleMsg(msg ServerMessage) {
-
-}
-
 func (driver *WSDriver) WriteToServer(msg PlayerMessage) error {
 	return driver.conn.WriteJSON(msg)
 }
