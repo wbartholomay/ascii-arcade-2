@@ -64,6 +64,30 @@ func (session *Session) displayBoardToUser() {
 	}
 }
 
+func (session *Session) handleGameOver() {
+	session.sessionToOutput <- session.game.DisplayBoard()
+	gameResult := ""
+	switch session.game.GameStatus {
+	case tictactoe.GameStatusPlayer1Win:
+		if session.playerNumber == 1 {
+			gameResult = "You won!"
+		} else {
+			gameResult = "You lost :("
+		}
+	case tictactoe.GameStatusPlayer2Win:
+		if session.playerNumber == 2 {
+			gameResult = "You won!"
+		} else {
+			gameResult = "You lost :("
+		}
+	case tictactoe.GameStatusDraw:
+		gameResult = "It's a tie."
+	default:
+		panic("server error - game status not accounted for")
+	}
+	session.sessionToOutput <- gameResult
+}
+
 func (session *Session) Run() {
 	defer func() {
 		session.conn.Close()
@@ -159,9 +183,19 @@ type SessionStateInGame struct {
 func (state SessionStateInGame) handleServerMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
 	case messages.ServerTurnResult:
+		moveFailed := msg.PlayerTurn == state.session.playerTurn
+		if moveFailed {
+			state.session.sessionToOutput <- "Move invalid - please enter a valid move"
+			return nil
+		}
+
 		state.session.game = msg.Game
 		state.session.playerTurn = msg.PlayerTurn
-		state.session.displayBoardToUser()
+		if msg.Game.GameStatus != tictactoe.GameStatusOngoing {
+			state.session.handleGameOver()
+		} else {
+			state.session.displayBoardToUser()
+		}
 		return nil
 	}
 

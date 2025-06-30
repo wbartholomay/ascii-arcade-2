@@ -15,16 +15,15 @@ const (
 )
 
 type GameStatus int
-
 const (
-	GameOngoing GameStatus = iota
-	XWon
-	OWon
+	GameStatusOngoing GameStatus = iota
+	GameStatusPlayer1Win
+	GameStatusPlayer2Win
+	GameStatusDraw
 )
 
 type TicTacToeGame struct {
 	Board      [3][3]TicTacToeSquare `json:"board"`
-	IsXTurn    bool                  `json:"is_x_turn"`
 	GameStatus GameStatus            `json:"game_status"`
 }
 
@@ -33,12 +32,12 @@ func NewTicTacToeGame() TicTacToeGame {
 
 	return TicTacToeGame{
 		Board:      board,
-		IsXTurn:    true,
-		GameStatus: GameOngoing,
+		GameStatus: GameStatusOngoing,
 	}
 }
 
-func (game *TicTacToeGame) ValidateMove(coords vector.Vector) bool {
+func (game *TicTacToeGame) ValidateMove(turn TicTacToeTurn) bool {
+	coords := turn.Coords
 	rowInBounds := coords.Y >= 0 && coords.Y <= 2
 	colInBounds := coords.X >= 0 && coords.Y <= 2
 	if !rowInBounds || !colInBounds {
@@ -57,7 +56,8 @@ func (game *TicTacToeGame) ExecuteTurn(turn TicTacToeTurn, playerNum int) {
 	}
 
 	game.Board[coords.Y][coords.X] = playerSquare
-	//TODO check for game over
+	
+	game.GameStatus = game.CheckGameStatus()
 }
 
 func (game *TicTacToeGame) DisplayBoard() string {
@@ -91,6 +91,76 @@ func (game *TicTacToeGame) DisplayBoard() string {
 	}
 	result += "\n"
 	return result
+}
+
+// Could find some more efficient solution (ex: associating different decimal values with each board space)
+func (game *TicTacToeGame) CheckGameStatus() GameStatus {
+	// Check rows for wins
+	for i := 0; i < 3; i++ {
+		if game.Board[i][0] != SquareEmpty &&
+			game.Board[i][0] == game.Board[i][1] &&
+			game.Board[i][1] == game.Board[i][2] {
+			if game.Board[i][0] == SquareX {
+				return GameStatusPlayer1Win
+			} else {
+				return GameStatusPlayer2Win
+			}
+		}
+	}
+
+	// Check columns for wins
+	for j := 0; j < 3; j++ {
+		if game.Board[0][j] != SquareEmpty &&
+			game.Board[0][j] == game.Board[1][j] &&
+			game.Board[1][j] == game.Board[2][j] {
+			if game.Board[0][j] == SquareX {
+				return GameStatusPlayer1Win
+			} else {
+				return GameStatusPlayer2Win
+			}
+		}
+	}
+
+	// Check diagonal (top-left to bottom-right)
+	if game.Board[0][0] != SquareEmpty &&
+		game.Board[0][0] == game.Board[1][1] &&
+		game.Board[1][1] == game.Board[2][2] {
+		if game.Board[0][0] == SquareX {
+			return GameStatusPlayer1Win
+		} else {
+			return GameStatusPlayer2Win
+		}
+	}
+
+	// Check diagonal (top-right to bottom-left)
+	if game.Board[0][2] != SquareEmpty &&
+		game.Board[0][2] == game.Board[1][1] &&
+		game.Board[1][1] == game.Board[2][0] {
+		if game.Board[0][2] == SquareX {
+			return GameStatusPlayer1Win
+		} else {
+			return GameStatusPlayer2Win
+		}
+	}
+
+	boardFull := true
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			if game.Board[i][j] == SquareEmpty {
+				boardFull = false
+				break
+			}
+		}
+		if !boardFull {
+			break
+		}
+	}
+
+	if boardFull {
+		return GameStatusDraw
+	}
+
+	return GameStatusOngoing
 }
 
 type TicTacToeTurn struct {

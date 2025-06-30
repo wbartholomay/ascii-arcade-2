@@ -24,7 +24,8 @@ func TestValidateMove(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := game.ValidateMove(tt.coords)
+			turn := TicTacToeTurn{Coords: tt.coords}
+			result := game.ValidateMove(turn)
 			if result != tt.expected {
 				t.Errorf("ValidateMove(%v) = %v, expected %v", tt.coords, result, tt.expected)
 			}

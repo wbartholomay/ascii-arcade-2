@@ -147,20 +147,28 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 
 	switch msg.Type {
 	case messages.ClientSendTurn:
-		//TODO need to maintain player turn in gamestate
-		state.room.game.ExecuteTurn(msg.TurnAction, playerNumber)
-		state.room.advanceTurn()
+		//TODO could make this more readable
+		isMoveValid := state.room.game.ValidateMove(msg.TurnAction)
+		if isMoveValid {
+			state.room.game.ExecuteTurn(msg.TurnAction, playerNumber)
+			state.room.advanceTurn()
+		}
+		serverMsg := messages.ServerMessage{
+			Type:       messages.ServerTurnResult,
+			Game:       state.room.game,
+			PlayerTurn: state.room.playerTurn,
+		}
 
-		state.room.playerOneChans.roomToPlayer <- messages.ServerMessage{
-		Type:       messages.ServerTurnResult,
-		Game:       state.room.game,
-		PlayerTurn: state.room.playerTurn,
-	}
-		state.room.playerTwoChans.roomToPlayer <-  messages.ServerMessage{
-		Type:       messages.ServerTurnResult,
-		Game:       state.room.game,
-		PlayerTurn: state.room.playerTurn,
-	}
+		if !isMoveValid && playerNumber == 1 {
+			state.room.playerOneChans.roomToPlayer <- serverMsg
+		} else if !isMoveValid && playerNumber == 2 {
+			state.room.playerTwoChans.roomToPlayer <- serverMsg
+		} else {
+			state.room.playerOneChans.roomToPlayer <- serverMsg
+			state.room.playerTwoChans.roomToPlayer <- serverMsg
+		}
+
+		//TODO: clean up if game ended
 	}
 
 	return nil

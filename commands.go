@@ -109,7 +109,7 @@ func (cmd CommandSendTurn) CreatePlayerMessage(args []string) (messages.ClientMe
 		return messages.ClientMessage{}, fmt.Errorf("row number must be a number")
 	}
 
-	moveCol, err := strconv.ParseInt(args[0], 10, 32)
+	moveCol, err := strconv.ParseInt(args[1], 10, 32)
 	if err != nil {
 		return messages.ClientMessage{}, fmt.Errorf("col number must be a number")
 	}
