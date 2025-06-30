@@ -64,28 +64,25 @@ func (session *Session) displayBoardToUser() {
 	}
 }
 
-func (session *Session) handleGameOver() {
+func (session *Session) handleGameOver(gameResult messages.GameResult, detailsFromServer string) {
 	session.sessionToOutput <- session.game.DisplayBoard()
-	gameResult := ""
-	switch session.game.GameStatus {
-	case tictactoe.GameStatusPlayer1Win:
-		if session.playerNumber == 1 {
-			gameResult = "You won!"
-		} else {
-			gameResult = "You lost :("
-		}
-	case tictactoe.GameStatusPlayer2Win:
-		if session.playerNumber == 2 {
-			gameResult = "You won!"
-		} else {
-			gameResult = "You lost :("
-		}
-	case tictactoe.GameStatusDraw:
-		gameResult = "It's a tie."
+	if detailsFromServer != "" {
+		session.sessionToOutput <- detailsFromServer
+	}
+
+	resultStr := ""
+	switch gameResult {
+	case messages.GameResultPlayerWin:
+		resultStr = "You won!"
+	case messages.GameResultPlayerLose:
+		resultStr = "You lost :("
+	case messages.GameResultDraw:
+		resultStr = "It's a tie."
 	default:
 		panic("server error - game status not accounted for")
 	}
-	session.sessionToOutput <- gameResult
+	session.sessionToOutput <- resultStr
+	session.setState(session.stateInMenu)
 }
 
 func (session *Session) Run() {
@@ -115,6 +112,16 @@ func (session *Session) ValidatePlayerMessage(msg messages.ClientMessage) error 
 }
 
 func (session *Session) setState(state SessionState) {
+	playerMessage := ""
+	switch state.(type) {
+	case SessionStateInMenu:
+		playerMessage = "Exiting to main menu."
+	case SessionStateWaitingRoom:
+		playerMessage = "Entering waiting room."
+	case SessionStateInGame:
+		playerMessage = "Opponent found, joining game!"
+	}
+	session.sessionToOutput <- playerMessage
 	session.state = state
 }
 
@@ -133,19 +140,21 @@ func (state SessionStateInMenu) handleServerMessage(msg messages.ServerMessage) 
 		fmt.Println("Joining waiting room...")
 		state.session.playerNumber = msg.PlayerNumber
 		state.session.setState(&state.session.stateWaitingRoom)
-		return nil
+	default:
+		return fmt.Errorf("unexpected server message type whle in menu: %v", msg.Type)
 	}
-
-	return fmt.Errorf("unexpected server message type whle in menu: %v", msg.Type)
+	return nil
 }
 
 func (state SessionStateInMenu) validatePlayerMessage(msg messages.ClientMessage) error {
 	switch msg.Type {
 	case messages.ClientJoinRoom:
-		return nil
+
+	default:
+		return fmt.Errorf("unexpected player message type while in menu: %v", msg.Type)
 	}
 
-	return fmt.Errorf("unexpected player message type while in menu: %v", msg.Type)
+	return nil
 }
 
 type SessionStateWaitingRoom struct {
@@ -160,20 +169,22 @@ func (state SessionStateWaitingRoom) handleServerMessage(msg messages.ServerMess
 		state.session.playerTurn = msg.PlayerTurn
 		state.session.displayBoardToUser()
 		state.session.setState(&state.session.stateInGame)
-		return nil
+	default:
+		return fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.Type)
 	}
 
-	return fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.Type)
+	return nil
 }
 
 func (state SessionStateWaitingRoom) validatePlayerMessage(msg messages.ClientMessage) error {
 	switch msg.Type {
 	case messages.ClientQuitRoom:
-		//TODO
-		return nil
+
+	default:
+		return fmt.Errorf("unexpected player message type while in waiting room: %v", msg.Type)
 	}
 
-	return fmt.Errorf("unexpected player message type while in waiting room: %v", msg.Type)
+	return nil
 }
 
 type SessionStateInGame struct {
@@ -191,15 +202,14 @@ func (state SessionStateInGame) handleServerMessage(msg messages.ServerMessage) 
 
 		state.session.game = msg.Game
 		state.session.playerTurn = msg.PlayerTurn
-		if msg.Game.GameStatus != tictactoe.GameStatusOngoing {
-			state.session.handleGameOver()
-		} else {
-			state.session.displayBoardToUser()
-		}
-		return nil
+		state.session.displayBoardToUser()
+	case messages.ServerGameFinished:
+		state.session.handleGameOver(msg.GameResult, msg.Message)
+	default:
+		return fmt.Errorf("unexpected server message type whle in game: %v", msg.Type)
 	}
 
-	return fmt.Errorf("unexpected server message type whle in game: %v", msg.Type)
+	return nil
 }
 
 func (state SessionStateInGame) validatePlayerMessage(msg messages.ClientMessage) error {
@@ -209,12 +219,11 @@ func (state SessionStateInGame) validatePlayerMessage(msg messages.ClientMessage
 		if state.session.playerNumber != state.session.playerTurn {
 			return fmt.Errorf("can not send a move on another players turn")
 		}
-
-		return nil
 	case messages.ClientQuitRoom:
 
-		return nil
+	default:
+		return fmt.Errorf("unexpected player message type while in game: %v", msg.Type)
 	}
 
-	return fmt.Errorf("unexpected player message type while in game: %v", msg.Type)
+	return nil
 }

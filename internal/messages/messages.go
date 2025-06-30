@@ -2,12 +2,23 @@ package messages
 
 import "github.com/wbarthol/ascii-arcade-2/internal/tictactoe"
 
+type GameResult int
+
+const (
+	GameResultPlayerWin GameResult = iota
+	GameResultPlayerLose
+	GameResultDraw
+)
+
 type ServerMessageType int
 
 const (
 	ServerRoomJoined ServerMessageType = iota
 	ServerGameStarted
 	ServerTurnResult
+	ServerRoomDisconnected
+	ServerGameFinished
+	ServerRoomUnavailable
 )
 
 type ServerMessage struct {
@@ -15,6 +26,8 @@ type ServerMessage struct {
 	PlayerNumber int                     `json:"player_number"`
 	PlayerTurn   int                     `json:"player_turn"`
 	Game         tictactoe.TicTacToeGame `json:"game"`
+	GameResult   GameResult              `json:"game_result"`
+	Message      string                  `json:"message"`
 }
 
 type ClientMessageType int

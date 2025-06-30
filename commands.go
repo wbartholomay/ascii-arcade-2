@@ -41,8 +41,17 @@ func GetCommands() map[string]Command {
 		},
 		"move": CommandSendTurn{
 			CommandBasic: CommandBasic{
-				name: "move",
+				name:        "move",
 				description: "select square. Usage: move <row-num> <col-num>",
+				callback: func(args []string) error {
+					return nil
+				},
+			},
+		},
+		"quit": CommandQuit{
+			CommandBasic: CommandBasic{
+				name:        "quit",
+				description: "quits current game.",
 				callback: func(args []string) error {
 					return nil
 				},
@@ -124,5 +133,15 @@ func (cmd CommandSendTurn) CreatePlayerMessage(args []string) (messages.ClientMe
 		TurnAction: tictactoe.TicTacToeTurn{
 			Coords: coords,
 		},
+	}, nil
+}
+
+type CommandQuit struct {
+	CommandBasic
+}
+
+func (cmd CommandQuit) CreatePlayerMessage(args []string) (messages.ClientMessage, error) {
+	return messages.ClientMessage{
+		Type: messages.ClientQuitRoom,
 	}, nil
 }

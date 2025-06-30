@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
 
@@ -62,11 +61,78 @@ func (room *Room) Run() {
 				return
 			}
 		case msg := <-room.playerOneChans.playerToRoom:
-			room.state.handlePlayerMessage(msg, 1)
+			err := room.state.handlePlayerMessage(msg, 1)
+			if err != nil {
+				log.Printf("error while handling player message, closing room: %v", err)
+				return
+			}
 		case msg := <-room.playerTwoChans.playerToRoom:
-			room.state.handlePlayerMessage(msg, 2)
+			err := room.state.handlePlayerMessage(msg, 2)
+			if err != nil {
+				log.Printf("error while handling player message, closing room: %v", err)
+				return
+			}
 		}
 	}
+}
+
+// onQuit - Sends message to players who did not quit, informing them of game completion.
+func (room *Room) endGameOnQuit(quittingPlayerNum int) {
+	roomNotRunning := room.state == room.waitingForPlayerOne || room.state == room.waitingForPlayerTwo
+	if roomNotRunning {
+		return
+	}
+
+	if quittingPlayerNum == 1 {
+		p2Message := messages.ServerMessage{
+			Type:       messages.ServerGameFinished,
+			Game:       room.game,
+			GameResult: messages.GameResultPlayerWin,
+			Message:    "Player 1 quit.",
+		}
+		room.playerTwoChans.roomToPlayer <- p2Message
+	} else {
+		p1Message := messages.ServerMessage{
+			Type:       messages.ServerGameFinished,
+			Game:       room.game,
+			GameResult: messages.GameResultPlayerWin,
+			Message:    "Player 2 quit.",
+		}
+		room.playerOneChans.roomToPlayer <- p1Message
+	}
+}
+
+func (room *Room) endGameOnCompletion() {
+	p1Message := messages.ServerMessage{
+		Type: messages.ServerGameFinished,
+		Game: room.game,
+	}
+	p2Message := messages.ServerMessage{
+		Type: messages.ServerGameFinished,
+		Game: room.game,
+	}
+	switch room.game.GameStatus {
+	case tictactoe.GameStatusDraw:
+			p1Message.GameResult, p2Message.GameResult = messages.GameResultDraw, messages.GameResultDraw
+	case tictactoe.GameStatusPlayer1Win:
+		p1Message.GameResult, p2Message.GameResult = messages.GameResultPlayerWin, messages.GameResultPlayerLose
+	case tictactoe.GameStatusPlayer2Win:
+		p1Message.GameResult, p2Message.GameResult = messages.GameResultPlayerLose, messages.GameResultPlayerWin
+	}
+
+	room.playerOneChans.roomToPlayer <- p1Message
+	room.playerTwoChans.roomToPlayer <- p2Message
+
+	//shut down EVERTYTHIGN
+	// close(room.playerOneChans.roomToPlayer)
+	// close(room.playerTwoChans.roomToPlayer)
+	// room.playerOneChans.playerToRoom = nil
+	// room.playerTwoChans.playerToRoom = nil
+
+	// ch := s.r.close
+	// go func(ch chan string) {
+	// 	ch <- s.r.code
+	// }(ch)
 }
 
 type RoomState interface {
@@ -123,11 +189,14 @@ func (state RoomStateWaitingForP2) handleJoinRequest(req RoomRequest) error {
 }
 
 func (state RoomStateWaitingForP2) handlePlayerMessage(msg messages.ClientMessage, playerNumber int) error {
-	if playerNumber != 2 {
-		//TODO handle this better than panicking
-		panic("should be no messages from player two while waiting for p2")
+	if playerNumber == 2 {
+		return fmt.Errorf("should be no messages from player two while waiting for p2")
 	}
-	//SWITCH ON PLAYER ONES MESSAGES HERE, NEED TO HANDLE P1 QUITTING (SET STATE TO CLOSING)
+	switch msg.Type {
+	case messages.ClientQuitRoom:
+		state.room.endGameOnQuit(playerNumber)
+		return fmt.Errorf("player %v quit", playerNumber)
+	}
 	return nil
 }
 
@@ -137,7 +206,10 @@ type RoomStateRunning struct {
 
 func (state RoomStateRunning) handleJoinRequest(req RoomRequest) error {
 	//TODO: Reject join request
-	return errors.New("room is already running, can not join")
+	req.chans.roomToPlayer <- messages.ServerMessage{
+		Type: messages.ServerRoomUnavailable,
+	}
+	return nil
 }
 
 func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, playerNumber int) error {
@@ -146,6 +218,10 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 	}
 
 	switch msg.Type {
+	case messages.ClientQuitRoom:
+		state.room.endGameOnQuit(playerNumber)
+		return fmt.Errorf("player %v quit", playerNumber)
+		
 	case messages.ClientSendTurn:
 		//TODO could make this more readable
 		isMoveValid := state.room.game.ValidateMove(msg.TurnAction)
@@ -153,12 +229,16 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 			state.room.game.ExecuteTurn(msg.TurnAction, playerNumber)
 			state.room.advanceTurn()
 		}
+		if state.room.game.GameStatus != tictactoe.GameStatusOngoing {
+			state.room.endGameOnCompletion()
+			return fmt.Errorf("game over, sent results to clients")
+		}
+
 		serverMsg := messages.ServerMessage{
 			Type:       messages.ServerTurnResult,
 			Game:       state.room.game,
 			PlayerTurn: state.room.playerTurn,
 		}
-
 		if !isMoveValid && playerNumber == 1 {
 			state.room.playerOneChans.roomToPlayer <- serverMsg
 		} else if !isMoveValid && playerNumber == 2 {
@@ -167,8 +247,6 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 			state.room.playerOneChans.roomToPlayer <- serverMsg
 			state.room.playerTwoChans.roomToPlayer <- serverMsg
 		}
-
-		//TODO: clean up if game ended
 	}
 
 	return nil

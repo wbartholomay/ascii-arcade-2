@@ -34,8 +34,6 @@ type Player struct {
 	roomRequests chan RoomRequest
 	clientRead   chan messages.ClientMessage
 	room         RoomChans
-
-	done chan struct{}
 }
 
 func NewPlayer(conn *websocket.Conn, roomRequests chan RoomRequest) *Player {
@@ -56,29 +54,39 @@ func NewPlayer(conn *websocket.Conn, roomRequests chan RoomRequest) *Player {
 
 func (p *Player) Run() {
 	go p.readPump()
-	defer fmt.Println("player goroutine exited")
+	defer log.Printf("Player %v goroutine exited\n", p.playerNumber)
 	for {
 		select {
 		case cm, ok := <-p.clientRead:
 			if !ok {
-				fmt.Println()
-				//error occurred when reading from client
-				//TODO: quit room
+				//client connection closed, handle like client gracefully quitting room
+				log.Println("Client connection closed, closing player.")
+				p.clientRead = nil
+				if p.room.playerToRoom != nil {
+					p.room.playerToRoom <- messages.ClientMessage{
+						Type: messages.ClientQuitRoom,
+					}
+				}
 				return
 			}
 			err := p.state.handleClientMessage(cm)
 			if err != nil {
-				fmt.Printf("Error while handling client message: %v\n", err)
+				log.Printf("Error while handling client message: %v\n", err)
 				return
 			}
 		case rm, ok := <-p.room.roomToPlayer:
 			if !ok {
-				//TODO
-				fmt.Println("Room channel closed")
+				//room closed - server error
+				//TODO keep player connection alive on game end
+				log.Println("Room closed, closing player.")
+				p.WriteToClient(messages.ServerMessage{
+					Type: messages.ServerRoomDisconnected,
+				})
+				return
 			}
 			err := p.state.handleRoomMessage(rm)
 			if err != nil {
-				fmt.Printf("Error while handling room message: %v\n", err)
+				log.Printf("Error while handling room message: %v\n", err)
 				return
 			}
 		}
@@ -160,7 +168,9 @@ func (state PlayerStateNotInRoom) handleRoomMessage(msg messages.ServerMessage) 
 		}
 
 		state.player.setState(state.player.waitingRoom)
-
+	case messages.ServerRoomUnavailable:
+		state.player.WriteToClient(msg)
+		return fmt.Errorf("player tried to join full room")
 	default:
 		return fmt.Errorf("unsupported message type while waiting for room: %v", msg.Type)
 	}
@@ -175,7 +185,9 @@ type PlayerStateWaitingRoom struct {
 func (state PlayerStateWaitingRoom) handleClientMessage(msg messages.ClientMessage) error {
 	switch msg.Type {
 	case messages.ClientQuitRoom:
-		//TODO IMPLEMENT QUITTING ROOMS
+		state.player.room.playerToRoom <- msg
+	default:
+		return fmt.Errorf("unsupported message type while waiting for room: %v", msg.Type)
 	}
 
 	return nil
@@ -183,6 +195,9 @@ func (state PlayerStateWaitingRoom) handleClientMessage(msg messages.ClientMessa
 
 func (state PlayerStateWaitingRoom) handleRoomMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
+	case messages.ServerGameFinished:
+		state.player.WriteToClient(msg)
+		return fmt.Errorf("game ended, closing client. game result: %v", msg.GameResult)
 	case messages.ServerGameStarted:
 		err := state.player.WriteToClient(msg)
 		if err != nil {
@@ -212,6 +227,9 @@ func (state PlayerStateInRoom) handleClientMessage(msg messages.ClientMessage) e
 
 func (state PlayerStateInRoom) handleRoomMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
+	case messages.ServerGameFinished:
+		state.player.WriteToClient(msg)
+		return fmt.Errorf("game ended, closing client. game result: %v", msg.GameResult)
 	case messages.ServerTurnResult:
 		err := state.player.WriteToClient(msg)
 		if err != nil {
