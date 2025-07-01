@@ -10,30 +10,32 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Set up Google Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
       with:
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
-        service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-        export_default_credentials: true
+        credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
     - name: Configure Docker for Artifact Registry
       run: gcloud auth configure-docker us-central1-docker.pkg.dev
 
     - name: Build Docker image
       run: |
-        docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/my-app:$GITHUB_SHA .
+        docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ascii-arcade/ascii-arcade-server:$GITHUB_SHA .
 
     - name: Push to Artifact Registry
       run: |
-        docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/my-app:$GITHUB_SHA
+        docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ascii-arcade/ascii-arcade-server:$GITHUB_SHA
 
     - name: Deploy to Cloud Run
       run: |
-        gcloud run deploy my-app \
-          --image us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/my-app:$GITHUB_SHA \
+        gcloud run deploy ascii-arcade-server \
+          --image us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ascii-arcade/ascii-arcade-server:$GITHUB_SHA \
           --region us-central1 \
           --platform managed \
-          --allow-unauthenticated
+          --allow-unauthenticated \
+          --port 8000
