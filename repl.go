@@ -26,10 +26,22 @@ func startRepl(session *Session) error {
 	}()
 
 	for {
-		fmt.Print("> ")
+		curState := ""
+		switch session.state.(type) {
+		case SessionStateInMenu:
+			curState = "Main Menu"
+		case SessionStateWaitingRoom:
+			curState = "Waiting Room"
+		case SessionStateInGame:
+			curState = "In Game"
+		}
+		fmt.Printf("%v > ", curState)
 		select {
 		case input := <-userInput:
-			processUserInput(input, session)
+			err := processUserInput(input, session)
+			if err != nil {
+				return err
+			}
 		case output := <-session.sessionToOutput:
 			fmt.Println(output)
 		}
@@ -62,16 +74,15 @@ func processUserInput(input []string, session *Session) error {
 		return nil
 	}
 
-	err = session.ValidatePlayerMessage(msg)
+	err = session.HandlePlayerMessage(msg)
 	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-
-	err = session.WriteToServer(msg)
-	if err != nil {
-		//only return an error when the process should be killed
-		return err
+		switch err := err.(type){
+		case ValidationError:
+			fmt.Println(err)
+			return nil
+		default:
+			return err
+		}
 	}
 	return nil
 }

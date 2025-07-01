@@ -23,9 +23,10 @@ type Room struct {
 	playerTwoChans RoomChans
 
 	requests chan RoomRequest
+	closeReq chan string
 }
 
-func NewRoom(code string) *Room {
+func NewRoom(code string, closeReq chan string) *Room {
 	room := &Room{
 		code: code,
 	}
@@ -34,6 +35,7 @@ func NewRoom(code string) *Room {
 	room.running = RoomStateRunning{room}
 	room.state = &room.waitingForPlayerOne
 	room.requests = make(chan RoomRequest)
+	room.closeReq = closeReq
 	return room
 }
 
@@ -50,6 +52,9 @@ func (room *Room) advanceTurn() {
 }
 
 func (room *Room) Run() {
+	defer func(){
+		room.closeReq <- room.code
+	}()
 	for {
 		select {
 		//TODO hanlde close requests
@@ -221,7 +226,7 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 	case messages.ClientQuitRoom:
 		state.room.endGameOnQuit(playerNumber)
 		return fmt.Errorf("player %v quit", playerNumber)
-		
+
 	case messages.ClientSendTurn:
 		//TODO could make this more readable
 		isMoveValid := state.room.game.ValidateMove(msg.TurnAction)

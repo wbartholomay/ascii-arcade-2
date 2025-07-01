@@ -12,8 +12,8 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-        return true
-    },
+		return true
+	},
 }
 
 type RoomRequest struct {
@@ -40,7 +40,7 @@ func (h *Hub) Run() {
 			if !ok {
 				// room = NewRoom(msg.code, closeReq)
 				log.Printf("Creating new room with code: %v", msg.code)
-				room = NewRoom(msg.code)
+				room = NewRoom(msg.code, closeReq)
 				go room.Run()
 				rooms[msg.code] = room
 			}
@@ -48,9 +48,10 @@ func (h *Hub) Run() {
 		case code := <-closeReq:
 			room, ok := rooms[code]
 			if !ok {
-				fmt.Println("illegal")
+				log.Println("Error closing room - room closed closeReq channel.")
 				break
 			}
+			log.Printf("Closing room %v\n", room.code)
 			close(room.requests)
 			delete(rooms, code)
 		}
