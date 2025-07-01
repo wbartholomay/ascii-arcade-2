@@ -69,6 +69,7 @@ func (session *Session) Run() {
 	for {
 		msg, ok := <-session.driverToSession
 		if !ok {
+			session.setState(session.stateInMenu)
 			return
 		}
 		session.state.handleServerMessage(msg)

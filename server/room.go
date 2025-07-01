@@ -52,7 +52,7 @@ func (room *Room) advanceTurn() {
 }
 
 func (room *Room) Run() {
-	defer func(){
+	defer func() {
 		room.closeReq <- room.code
 	}()
 	for {
@@ -118,7 +118,7 @@ func (room *Room) endGameOnCompletion() {
 	}
 	switch room.game.GameStatus {
 	case tictactoe.GameStatusDraw:
-			p1Message.GameResult, p2Message.GameResult = messages.GameResultDraw, messages.GameResultDraw
+		p1Message.GameResult, p2Message.GameResult = messages.GameResultDraw, messages.GameResultDraw
 	case tictactoe.GameStatusPlayer1Win:
 		p1Message.GameResult, p2Message.GameResult = messages.GameResultPlayerWin, messages.GameResultPlayerLose
 	case tictactoe.GameStatusPlayer2Win:
@@ -218,10 +218,6 @@ func (state RoomStateRunning) handleJoinRequest(req RoomRequest) error {
 }
 
 func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, playerNumber int) error {
-	if playerNumber != state.room.playerTurn {
-		return fmt.Errorf("received a message from player when it is not their turn")
-	}
-
 	switch msg.Type {
 	case messages.ClientQuitRoom:
 		state.room.endGameOnQuit(playerNumber)
@@ -229,6 +225,10 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 
 	case messages.ClientSendTurn:
 		//TODO could make this more readable
+		if playerNumber != state.room.playerTurn {
+			return fmt.Errorf("received a message from player when it is not their turn")
+		}
+
 		isMoveValid := state.room.game.ValidateMove(msg.TurnAction)
 		if isMoveValid {
 			state.room.game.ExecuteTurn(msg.TurnAction, playerNumber)

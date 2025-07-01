@@ -35,8 +35,6 @@ func (driver *WSDriver) WriteToServer(msg messages.ClientMessage) error {
 }
 
 func (driver *WSDriver) Run() {
-	//TODO - Find an effective way to close the connection without having the driver failing the read from server
-	//should maybe reverse which part is in the go func
 	defer func() {
 		fmt.Println("Closing server connection.")
 	}()
@@ -49,7 +47,8 @@ func (driver *WSDriver) Run() {
 			return
 		}
 		if err != nil {
-			fmt.Printf("error reading message from server %v\n", err)
+			//TODO add logger and debug mode
+			fmt.Printf("error reading message from server: %v\n", err)
 			driver.CloseWS()
 			return
 		}
@@ -58,6 +57,10 @@ func (driver *WSDriver) Run() {
 }
 
 func (driver *WSDriver) CloseWS() {
+	if !driver.wsOpen {
+		return
+	}
+	
 	driver.wsOpen = false
 	driver.conn.Close()
 	close(driver.driverToSession)
