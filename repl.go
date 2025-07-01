@@ -16,6 +16,18 @@ func cleanInput(text string) []string {
 func startRepl(session *Session) error {
 	userInput := make(chan []string)
 
+	// Print ASCII ARCADE banner
+	fmt.Print(`
+ █████╗ ███████╗ ██████╗██╗██╗     █████╗ ██████╗  ██████╗ █████╗ ██████╗ ███████╗
+██╔══██╗██╔════╝██╔════╝██║██║    ██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝
+███████║███████╗██║     ██║██║    ███████║██████╔╝██║     ███████║██║  ██║█████╗  
+██╔══██║╚════██║██║     ██║██║    ██╔══██║██╔══██╗██║     ██╔══██║██║  ██║██╔══╝  
+██║  ██║███████║╚██████╗██║██║    ██║  ██║██║  ██║╚██████╗██║  ██║██████╔╝███████╗
+╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚═╝    ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝ ╚══════╝
+
+`)
+	fmt.Println("Welcome to ASCII arcade! Enter \033[33mjoin <room-code>\033[0m to create/join a room, or enter \033[33mhelp\033[0m to see a list of commands.")
+
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
 		for {
@@ -29,11 +41,11 @@ func startRepl(session *Session) error {
 		curState := ""
 		switch session.state.(type) {
 		case SessionStateInMenu:
-			curState = "Main Menu"
+			curState = AnsiLightBlue + "Main Menu" + AnsiReset
 		case SessionStateWaitingRoom:
-			curState = "Waiting Room"
+			curState = AnsiLightRed + "Waiting Room" + AnsiReset
 		case SessionStateInGame:
-			curState = "In Game"
+			curState = AnsiLightGreen + "In Game" + AnsiReset
 		}
 		fmt.Printf("%v > ", curState)
 		select {
@@ -76,7 +88,7 @@ func processUserInput(input []string, session *Session) error {
 
 	err = session.HandlePlayerMessage(msg)
 	if err != nil {
-		switch err := err.(type){
+		switch err := err.(type) {
 		case ValidationError:
 			fmt.Println(err)
 			return nil

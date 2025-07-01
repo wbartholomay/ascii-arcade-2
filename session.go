@@ -35,7 +35,7 @@ type Session struct {
 func NewSession() *Session {
 	//Could move the dialing to StartWS
 	session := Session{
-		sessionToOutput: make(chan string),
+		sessionToOutput: make(chan string, 10),
 	}
 
 	session.stateInMenu = SessionStateInMenu{
@@ -69,7 +69,9 @@ func (session *Session) Run() {
 	for {
 		msg, ok := <-session.driverToSession
 		if !ok {
-			session.setState(session.stateInMenu)
+			if session.state != session.stateInMenu {
+				session.setState(session.stateInMenu)
+			}
 			return
 		}
 		session.state.handleServerMessage(msg)
@@ -98,11 +100,11 @@ func (session *Session) handleGameOver(gameResult messages.GameResult, detailsFr
 	resultStr := ""
 	switch gameResult {
 	case messages.GameResultPlayerWin:
-		resultStr = "You won!"
+		resultStr = AnsiGreen + "You won!" + AnsiReset
 	case messages.GameResultPlayerLose:
-		resultStr = "You lost :("
+		resultStr = AnsiRed + "You lost :(" + AnsiReset
 	case messages.GameResultDraw:
-		resultStr = "It's a tie."
+		resultStr = AnsiBlue + "It's a tie." + AnsiReset
 	default:
 		panic("server error - game status not accounted for")
 	}
@@ -130,9 +132,7 @@ func (session *Session) setState(state SessionState) {
 	case SessionStateInGame:
 		playerMessage = "Opponent found, joining game!"
 	}
-	go func() {
-		session.sessionToOutput <- playerMessage
-	}()
+	session.sessionToOutput <- playerMessage
 	session.state = state
 }
 
@@ -185,8 +185,8 @@ func (state SessionStateWaitingRoom) handleServerMessage(msg messages.ServerMess
 	case messages.ServerGameStarted:
 		state.session.game = msg.Game
 		state.session.playerTurn = msg.PlayerTurn
-		state.session.displayBoardToUser()
 		state.session.setState(state.session.stateInGame)
+		state.session.displayBoardToUser()
 	default:
 		return fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.Type)
 	}

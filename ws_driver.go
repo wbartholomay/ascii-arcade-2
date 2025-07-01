@@ -57,7 +57,7 @@ func (driver *WSDriver) Run() {
 }
 
 func (driver *WSDriver) CloseWS() {
-	if !driver.wsOpen {
+	if driver == nil || !driver.wsOpen {
 		return
 	}
 	

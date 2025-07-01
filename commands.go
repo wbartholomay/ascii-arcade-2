@@ -17,7 +17,7 @@ func GetCommands() map[string]Command {
 			description: "display the list of all commands",
 			callback: func(args []string) error {
 				for _, cmd := range GetCommands() {
-					fmt.Printf("%s: %s\n", cmd.GetName(), cmd.GetDescription())
+					fmt.Printf("%s: %s\n", AnsiYellow + cmd.GetName() + AnsiReset, cmd.GetDescription())
 				}
 				return nil
 			},
@@ -33,7 +33,7 @@ func GetCommands() map[string]Command {
 		"join": CommandJoin{
 			CommandBasic: CommandBasic{
 				name:        "join",
-				description: "join a room. Usage: join <room-code>",
+				description: "join a room. Usage: \033[33mjoin <room-code>\033[0m",
 				callback: func(args []string) error {
 					return nil
 				},
@@ -42,7 +42,7 @@ func GetCommands() map[string]Command {
 		"move": CommandSendTurn{
 			CommandBasic: CommandBasic{
 				name:        "move",
-				description: "select square. Usage: move <row-num> <col-num>",
+				description: "select square. Usage: \033[33mmove <row-num> <col-num>\033[0m",
 				callback: func(args []string) error {
 					return nil
 				},
@@ -94,7 +94,7 @@ type CommandJoin struct {
 
 func (cmd CommandJoin) CreatePlayerMessage(args []string) (messages.ClientMessage, error) {
 	if len(args) < 1 {
-		return messages.ClientMessage{}, fmt.Errorf("not enough arguments provided. Expecting <room-code>")
+		return messages.ClientMessage{}, fmt.Errorf("not enough arguments provided. Expecting \033[33m<room-code>\033[0m")
 	}
 	roomCode := args[0]
 
@@ -110,7 +110,7 @@ type CommandSendTurn struct {
 
 func (cmd CommandSendTurn) CreatePlayerMessage(args []string) (messages.ClientMessage, error) {
 	if len(args) < 2 {
-		return messages.ClientMessage{}, fmt.Errorf("not enough arguments provided. Expecting <row-num> <col-num>")
+		return messages.ClientMessage{}, fmt.Errorf("not enough arguments provided. Expecting \033[33m<row-num> <col-num>\033[0m")
 	}
 
 	moveRow, err := strconv.ParseInt(args[0], 10, 32)

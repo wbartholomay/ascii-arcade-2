@@ -72,9 +72,9 @@ func (game *TicTacToeGame) DisplayBoard() string {
 			case SquareEmpty:
 				symbol = " "
 			case SquareX:
-				symbol = "X"
+				symbol = "\033[31mX\033[0m"
 			case SquareO:
-				symbol = "O"
+				symbol = "\033[34mO\033[0m"
 			}
 
 			if j < len(row)-1 {

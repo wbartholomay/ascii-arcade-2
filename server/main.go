@@ -13,5 +13,5 @@ func main() {
 
 	http.HandleFunc("/", hub.ServeWs)
 
-	http.ListenAndServe("localhost:8000", nil)
+	http.ListenAndServe(":8000", nil)
 }
