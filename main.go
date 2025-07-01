@@ -12,7 +12,7 @@ const (
 	AnsiLightGreen = "\033[92m"
 	AnsiLightBlue  = "\033[94m"
 )
-
+//
 func main() {
 	session := NewSession()
 
