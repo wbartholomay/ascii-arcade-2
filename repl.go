@@ -61,6 +61,9 @@ func startRepl(session *Session) error {
 }
 
 func processUserInput(input []string, session *Session) error {
+	if len(input) == 0 {
+		return nil
+	}
 	commandName := input[0]
 	commandArgs := input[1:]
 	cmd, ok := GetCommands()[commandName]

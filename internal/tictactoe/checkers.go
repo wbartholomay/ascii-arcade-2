@@ -1,0 +1,297 @@
+package tictactoe
+
+import (
+	"fmt"
+
+	"github.com/wbarthol/ascii-arcade-2/internal/vector"
+)
+
+const pieceWhite = "w"
+const pieceBlack = "b"
+
+type CheckersPiece struct {
+	ID     int    `json:"id"`
+	Color  string `json:"color"`
+	IsKing bool   `json:"is_king"`
+}
+
+type CheckersGame struct {
+	GameType       GameType              `json:"game_type"`
+	Board          [8][8]CheckersPiece   `json:"board"`
+	PiecePositions map[int]vector.Vector `json:"piece_positions"`
+	GameStatus     GameStatus            `json:"game_status"`
+}
+
+func NewCheckersGame() *CheckersGame {
+	board := [8][8]CheckersPiece{}
+	pieces := map[int]vector.Vector{}
+
+	whitePieceID := 101
+	blackPieceID := 201
+
+	for row := range board {
+		for col := range board[row] {
+			hasPiece := ((row % 2) == 0) == ((col % 2) == 0)
+
+			//initialize pieces
+			if hasPiece && row < 3 {
+				board[row][col] = CheckersPiece{
+					ID:     blackPieceID,
+					Color:  pieceBlack,
+					IsKing: false,
+				}
+				pieces[blackPieceID] = vector.Vector{
+					Y: row,
+					X: col,
+				}
+				blackPieceID++
+			} else if hasPiece && row > 4 {
+				board[row][col] = CheckersPiece{
+					ID:     whitePieceID,
+					Color:  pieceWhite,
+					IsKing: false,
+				}
+				pieces[whitePieceID] = vector.Vector{
+					Y: row,
+					X: col,
+				}
+				whitePieceID++
+			} else {
+				//leaving an empty struct here for now
+				board[row][col] = CheckersPiece{}
+			}
+		}
+	}
+
+	return &CheckersGame{
+		GameType:       GameTypeCheckers,
+		Board:          board,
+		PiecePositions: pieces,
+		GameStatus:     GameStatusOngoing,
+	}
+}
+
+func (game *CheckersGame) GetGameType() GameType {
+	return game.GameType
+}
+
+type CheckersDirection int
+
+const (
+	CheckersDirectionLeft CheckersDirection = iota
+	CheckersDirectionRight
+	CheckersDirectionBackLeft
+	CheckersDirectionBackRight
+)
+
+type CheckersTurn struct {
+	PieceID   int               `json:"piece_id"`
+	Direction CheckersDirection `json:"direction"`
+}
+
+func (turn CheckersTurn) isGameTurn() {}
+
+// TODO switch this over to returning an error instead of bool + string
+func (game *CheckersGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, string) {
+	turn, ok := gameTurn.(CheckersTurn)
+	if !ok {
+		panic("server error - sent a turn not of type checkers turn during checkers game")
+	}
+
+	//check selected square
+	pieceCoords, ok := game.PiecePositions[turn.PieceID]
+	if !ok {
+		return false, fmt.Sprintf("no piece found with ID %v", turn.PieceID)
+	}
+
+	piece := game.Board[pieceCoords.Y][pieceCoords.X]
+	if !piece.IsKing {
+		if turn.Direction == CheckersDirectionBackLeft || turn.Direction == CheckersDirectionBackRight {
+			return false, "only kings can move backwards"
+		}
+	}
+
+	//get absolute direction based on input direction and piece color
+	trueDirection := turn.Direction
+	if playerNum == 2 {
+		trueDirection = convertDirectionFromBlackToWhite(trueDirection)
+	}
+
+	targetSquare := applyMove(pieceCoords, trueDirection)
+	//check if target square is occupied or OOB
+	//TODO add capture check
+	squareOutOfBounds := targetSquare.X < 0 || targetSquare.X > 7 || targetSquare.Y < 0 || targetSquare.Y > 7
+	if squareOutOfBounds {
+		return false, "destination is out of bounds"
+	}
+
+	if !game.isSquareEmpty(targetSquare) {
+		return false, "destination is occupied"
+	}
+	return true, ""
+}
+
+func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {
+	turn, ok := gameTurn.(CheckersTurn)
+	if !ok {
+		panic("server error - sent a turn not of type checkers turn during checkers game")
+	}
+
+	pieceCoords, ok := game.PiecePositions[turn.PieceID]
+	if !ok {
+		panic("validation was not called before execution, or it failed")
+	}
+
+	//get absolute direction based on input direction and piece color
+	trueDirection := turn.Direction
+	if playerNum == 2 {
+		trueDirection = convertDirectionFromBlackToWhite(trueDirection)
+	}
+
+	targetSquare := applyMove(pieceCoords, trueDirection)
+	game.Board[targetSquare.Y][targetSquare.X] = game.Board[pieceCoords.Y][pieceCoords.X]
+	game.Board[pieceCoords.Y][pieceCoords.X] = CheckersPiece{}
+	//TODO capture logic, game over logic
+
+}
+
+func (game *CheckersGame) DisplayBoard(isWhiteTurn bool) string {
+	result := ""
+	board := game.Board
+	rowNum := 0
+	increment := 1
+	checkIndex := func(i int) bool {
+		if isWhiteTurn {
+			return i < 8
+		} else {
+			return i >= 0
+		}
+	}
+
+	if !isWhiteTurn {
+		rowNum = 7
+		increment = -1
+		result += "       7       6       5       4       3       2       1       0    \n"
+	} else {
+		result += "       0       1       2       3       4       5       6       7    \n"
+	}
+
+	for ; checkIndex(rowNum); rowNum += increment {
+		result += "   —————————————————————————————————————————————————————————————————\n"
+		squareStr := ""
+		if (rowNum%2 == 0 && isWhiteTurn) || (rowNum%2 != 0 && !isWhiteTurn) {
+			squareStr = "   |       |#######|       |#######|       |#######|       |#######|"
+		} else {
+			squareStr = "   |#######|       |#######|       |#######|       |#######|       |"
+		}
+		result += squareStr + "\n"
+		rowStr := fmt.Sprintf("%v  |", string(rune('a'+rowNum)))
+
+		colNum := 0
+		if !isWhiteTurn {
+			colNum = 7
+		}
+
+		for ; checkIndex(colNum); colNum += increment {
+			piece := board[rowNum][colNum]
+			if rowNum%2 == colNum%2 {
+				rowStr += fmt.Sprintf("%v|", piece.renderPiece())
+			} else {
+				rowStr += "#######|"
+			}
+		}
+		result += rowStr + "\n"
+		result += squareStr + "\n"
+	}
+	result += "   —————————————————————————————————————————————————————————————————\n"
+
+	return result
+}
+
+func (piece *CheckersPiece) renderPiece() string {
+	if piece.Color == "" {
+		return "       "
+	}
+
+	pieceStr := ""
+	if piece.IsKing {
+		pieceStr += "👑"
+	} else {
+		pieceStr += "  "
+	}
+
+	if piece.Color == pieceWhite {
+		pieceStr += "⚪"
+	} else if piece.Color == pieceBlack {
+		pieceStr += "🔵"
+	}
+	pieceStr += toSubscript(piece.getDisplayID())
+
+	if piece.getDisplayID() < 10 {
+		pieceStr += " "
+	}
+
+	return pieceStr + " "
+}
+
+func toSubscript(n int) string {
+	subs := []string{"", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉", "₁₀", "₁₁", "₁₂"}
+	return subs[n]
+}
+
+func (piece *CheckersPiece) getDisplayID() int {
+	displayId := 0
+	if piece.Color == pieceWhite {
+		displayId = piece.ID - 100
+	} else {
+		displayId = piece.ID - 200
+	}
+	return displayId
+}
+
+func convertDirectionFromBlackToWhite(direction CheckersDirection) CheckersDirection {
+	switch direction {
+	case CheckersDirectionLeft:
+		return CheckersDirectionBackRight
+	case CheckersDirectionRight:
+		return CheckersDirectionBackLeft
+	case CheckersDirectionBackLeft:
+		return CheckersDirectionRight
+	case CheckersDirectionBackRight:
+		return CheckersDirectionLeft
+	}
+	return CheckersDirectionLeft
+}
+
+func applyMove(srcSquare vector.Vector, direction CheckersDirection) vector.Vector {
+	directionVector := vector.Vector{}
+	switch direction {
+	case CheckersDirectionLeft:
+		directionVector = vector.Vector{
+			X: -1,
+			Y: -1,
+		}
+	case CheckersDirectionRight:
+		directionVector = vector.Vector{
+			X: 1,
+			Y: -1,
+		}
+	case CheckersDirectionBackLeft:
+		directionVector = vector.Vector{
+			X: -1,
+			Y: 1,
+		}
+	case CheckersDirectionBackRight:
+		directionVector = vector.Vector{
+			X: 1,
+			Y: 1,
+		}
+	}
+	srcSquare.Add(directionVector)
+	return srcSquare
+}
+
+func (game *CheckersGame) isSquareEmpty(coords vector.Vector) bool {
+	piece := game.Board[coords.Y][coords.X]
+	return piece.Color == ""
+}

@@ -35,10 +35,6 @@ func (driver *WSDriver) WriteToServer(msg messages.ClientMessage) error {
 }
 
 func (driver *WSDriver) Run() {
-	defer func() {
-		fmt.Println("Closing server connection.")
-	}()
-
 	for {
 		var msg messages.ServerMessage
 		err := driver.conn.ReadJSON(&msg)
