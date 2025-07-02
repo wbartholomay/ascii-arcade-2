@@ -30,12 +30,14 @@ type Session struct {
 	sessionToOutput chan string
 	driverToSession chan messages.ServerMessage
 	wsDriver        *WSDriver
+	serverUrl       string
 }
 
-func NewSession() *Session {
+func NewSession(serverUrl string) *Session {
 	//Could move the dialing to StartWS
 	session := Session{
 		sessionToOutput: make(chan string, 10),
+		serverUrl: serverUrl,
 	}
 
 	session.stateInMenu = SessionStateInMenu{
@@ -159,7 +161,7 @@ func (state SessionStateInMenu) handleServerMessage(msg messages.ServerMessage) 
 func (state SessionStateInMenu) handlePlayerMessage(msg messages.ClientMessage) error {
 	switch msg.Type {
 	case messages.ClientJoinRoom:
-		err := state.session.StartWS(URL)
+		err := state.session.StartWS(state.session.serverUrl)
 		if err != nil {
 			return err
 		}

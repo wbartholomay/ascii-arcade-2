@@ -1,6 +1,10 @@
 package main
 
-const URL = "ws://localhost:8000/"
+import (
+	"os"
+
+	"github.com/joho/godotenv"
+)
 
 const (
 	AnsiReset      = "\033[0m"
@@ -12,9 +16,15 @@ const (
 	AnsiLightGreen = "\033[92m"
 	AnsiLightBlue  = "\033[94m"
 )
-//
+
 func main() {
-	session := NewSession()
+	godotenv.Load()
+	url := os.Getenv("SERVER_URL")
+	if url == "" {
+		url = "wss://ascii-arcade-server-714989044760.us-central1.run.app"
+	}
+
+	session := NewSession(url)
 
 	err := startRepl(session)
 	if err != nil {
