@@ -1,4 +1,4 @@
-package tictactoe
+package game
 
 type GameType int
 
@@ -18,10 +18,11 @@ const (
 
 type Game interface {
 	GetGameType() GameType
+	GetGameStatus() GameStatus
 	//TODO improve this from empty interface
 	ValidateMove(GameTurn, int) (bool, string)
 	ExecuteTurn(GameTurn, int)
-	DisplayBoard(bool) string
+	DisplayBoard(int) string
 }
 
 type GameTurn interface {

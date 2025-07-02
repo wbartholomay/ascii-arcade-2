@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/wbarthol/ascii-arcade-2/internal/messages"
-	"github.com/wbarthol/ascii-arcade-2/internal/tictactoe"
+	"github.com/wbarthol/ascii-arcade-2/internal/game"
 )
 
 type ValidationError struct {
@@ -24,8 +24,8 @@ type Session struct {
 	playerNumber int
 	playerTurn   int
 
-	//TODO make this an interface to allow for many game types
-	game tictactoe.TicTacToeGame
+	gameType game.GameType
+	game game.Game
 
 	sessionToOutput chan string
 	driverToSession chan messages.ServerMessage
@@ -85,7 +85,7 @@ func (session Session) isPlayerTurn() bool {
 }
 
 func (session *Session) displayBoardToUser() {
-	session.sessionToOutput <- session.game.DisplayBoard()
+	session.sessionToOutput <- session.game.DisplayBoard(session.playerNumber)
 	if session.isPlayerTurn() {
 		session.sessionToOutput <- "Your turn, make a move."
 	} else {
@@ -94,7 +94,7 @@ func (session *Session) displayBoardToUser() {
 }
 
 func (session *Session) handleGameOver(gameResult messages.GameResult, detailsFromServer string) {
-	session.sessionToOutput <- session.game.DisplayBoard()
+	session.sessionToOutput <- session.game.DisplayBoard(session.playerNumber)
 	if detailsFromServer != "" {
 		session.sessionToOutput <- detailsFromServer
 	}
@@ -184,6 +184,7 @@ type SessionStateWaitingRoom struct {
 
 func (state SessionStateWaitingRoom) handleServerMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
+	
 	case messages.ServerGameStarted:
 		state.session.game = msg.Game
 		state.session.playerTurn = msg.PlayerTurn
@@ -211,6 +212,14 @@ func (state SessionStateWaitingRoom) handlePlayerMessage(msg messages.ClientMess
 	}
 
 	return nil
+}
+
+type SessionStateInGameSelection struct {
+	session *Session
+}
+
+func (state SessionStateInGameSelection) handleServerMessage(msg messages.ServerMessage) error {
+
 }
 
 type SessionStateInGame struct {

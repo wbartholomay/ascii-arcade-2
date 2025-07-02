@@ -1,4 +1,4 @@
-package tictactoe
+package game
 
 import (
 	"fmt"
@@ -73,6 +73,10 @@ func NewCheckersGame() *CheckersGame {
 
 func (game *CheckersGame) GetGameType() GameType {
 	return game.GameType
+}
+
+func (game *CheckersGame) GetGameStatus() GameStatus {
+	return game.GameStatus
 }
 
 type CheckersDirection int
@@ -155,7 +159,12 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {
 
 }
 
-func (game *CheckersGame) DisplayBoard(isWhiteTurn bool) string {
+func (game *CheckersGame) DisplayBoard(playerNum int) string {
+	isWhiteTurn := true
+	if playerNum == 2 {
+		isWhiteTurn = false
+	}
+
 	result := ""
 	board := game.Board
 	rowNum := 0

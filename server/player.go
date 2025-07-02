@@ -198,7 +198,7 @@ func (state PlayerStateWaitingRoom) handleRoomMessage(msg messages.ServerMessage
 	case messages.ServerGameFinished:
 		state.player.WriteToClient(msg)
 		return fmt.Errorf("game ended, closing client. game result: %v", msg.GameResult)
-	case messages.ServerGameStarted:
+	case messages.ServerEnteredGameSelection:
 		err := state.player.WriteToClient(msg)
 		if err != nil {
 			return err
@@ -206,6 +206,40 @@ func (state PlayerStateWaitingRoom) handleRoomMessage(msg messages.ServerMessage
 	}
 
 	state.player.setState(state.player.inRoom)
+	return nil
+}
+
+type PlayerStateInGameSelection struct {
+	player *Player
+}
+
+func (state PlayerStateInGameSelection) handleClientMessage(msg messages.ClientMessage) error {
+	switch msg.Type {
+	case messages.ClientQuitRoom:
+		state.player.room.playerToRoom <- msg
+	case messages.ClientSelectGameType:
+		state.player.room.playerToRoom <- msg
+	default:
+		return fmt.Errorf("unsupported message type while game selection: %v", msg.Type)
+	}
+
+	return nil
+}
+
+func (state PlayerStateInGameSelection) handleRoomMessage(msg messages.ServerMessage) error {
+	switch msg.Type {
+	case messages.ServerGameFinished:
+		state.player.WriteToClient(msg)
+		return fmt.Errorf("game ended, closing client. game result: %v", msg.GameResult)
+	case messages.ServerGameStarted:
+		err := state.player.WriteToClient(msg)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported message type while in room: %v", msg.Type)
+	}
+
 	return nil
 }
 

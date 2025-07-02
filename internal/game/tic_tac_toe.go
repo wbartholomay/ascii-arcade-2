@@ -1,4 +1,4 @@
-package tictactoe
+package game
 
 import (
 	"fmt"
@@ -31,6 +31,10 @@ func NewTicTacToeGame() *TicTacToeGame {
 
 func (game *TicTacToeGame) GetGameType() GameType {
 	return game.GameType
+}
+
+func (game *TicTacToeGame) GetGameStatus() GameStatus {
+	return game.GameStatus
 }
 
 func (game *TicTacToeGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, string) {
@@ -76,7 +80,7 @@ func (game *TicTacToeGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {
 	game.GameStatus = game.checkGameStatus()
 }
 
-func (game *TicTacToeGame) DisplayBoard(_ bool) string {
+func (game *TicTacToeGame) DisplayBoard(_ int) string {
 	var result string
 	result += "\n   0   1   2\n"
 

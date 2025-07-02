@@ -83,7 +83,7 @@ func processUserInput(input []string, session *Session) error {
 		return fmt.Errorf("server error: entered a command that was not a basic or game command")
 	}
 
-	msg, err := gameCommand.CreatePlayerMessage(commandArgs)
+	msg, err := gameCommand.CreatePlayerMessage(session.gameType, commandArgs)
 	if err != nil {
 		fmt.Printf("error creating player message from command: %v\n", err)
 		return nil
