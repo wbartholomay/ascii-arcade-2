@@ -2,8 +2,8 @@ package game
 
 import (
 	"fmt"
-
 	"github.com/wbarthol/ascii-arcade-2/internal/vector"
+	"log"
 )
 
 const pieceWhite = "w"
@@ -16,10 +16,12 @@ type CheckersPiece struct {
 }
 
 type CheckersGame struct {
-	GameType       GameType              `json:"game_type"`
-	Board          [8][8]CheckersPiece   `json:"board"`
-	PiecePositions map[int]vector.Vector `json:"piece_positions"`
-	GameStatus     GameStatus            `json:"game_status"`
+	GameType        GameType              `json:"game_type"`
+	Board           [8][8]CheckersPiece   `json:"board"`
+	PiecePositions  map[int]vector.Vector `json:"piece_positions"`
+	GameStatus      GameStatus            `json:"game_status"`
+	whitePieceCount int
+	blackPieceCount int
 }
 
 func NewCheckersGame() *CheckersGame {
@@ -64,10 +66,12 @@ func NewCheckersGame() *CheckersGame {
 	}
 
 	return &CheckersGame{
-		GameType:       GameTypeCheckers,
-		Board:          board,
-		PiecePositions: pieces,
-		GameStatus:     GameStatusOngoing,
+		GameType:        GameTypeCheckers,
+		Board:           board,
+		PiecePositions:  pieces,
+		GameStatus:      GameStatusOngoing,
+		whitePieceCount: 12,
+		blackPieceCount: 12,
 	}
 }
 
@@ -93,7 +97,7 @@ type CheckersTurn struct {
 	Direction CheckersDirection `json:"direction"`
 }
 
-func (turn CheckersTurn) GetGameType() GameType{
+func (turn CheckersTurn) GetGameType() GameType {
 	return GameTypeCheckers
 }
 
@@ -131,16 +135,26 @@ func (game *CheckersGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, 
 	}
 
 	targetSquare := applyMove(pieceCoords, trueDirection)
-	//check if target square is occupied or OOB
-	//TODO add capture check
-	squareOutOfBounds := targetSquare.X < 0 || targetSquare.X > 7 || targetSquare.Y < 0 || targetSquare.Y > 7
-	if squareOutOfBounds {
+	if game.isSquareOutOfBounds(targetSquare) {
 		return false, "destination is out of bounds"
 	}
-
-	if !game.isSquareEmpty(targetSquare) {
+	targetPiece := game.Board[targetSquare.Y][targetSquare.X]
+	if targetPiece.Color == piece.Color {
 		return false, "destination is occupied"
 	}
+
+	//check for capture
+	isOpponentPieceOnDest := targetPiece.Color != "" && targetPiece.Color != piece.Color
+	if isOpponentPieceOnDest {
+		squareBehindTarget := applyMove(targetSquare, trueDirection)
+		if game.isSquareOutOfBounds(squareBehindTarget) {
+			return false, "destination is out of bounds"
+		}
+		if !game.isSquareEmpty(squareBehindTarget) {
+			return false, "destination is occupied"
+		}
+	}
+
 	return true, ""
 }
 
@@ -161,6 +175,7 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {
 	if !ok {
 		panic("validation was not called before execution, or it failed")
 	}
+	piece := game.Board[pieceCoords.Y][pieceCoords.X]
 
 	//get absolute direction based on input direction and piece color
 	trueDirection := turn.Direction
@@ -169,10 +184,19 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {
 	}
 
 	targetSquare := applyMove(pieceCoords, trueDirection)
+	targetPiece := game.Board[targetSquare.Y][targetSquare.X]
+	isOpponentPieceOnDest := targetPiece.Color != "" && targetPiece.Color != piece.Color
+
+	//assume validation has already run, and destination being occupied by opponent means capture
+	if isOpponentPieceOnDest {
+		game.capturePiece(targetSquare)
+		targetSquare = applyMove(targetSquare, trueDirection)
+	}
+
 	game.Board[targetSquare.Y][targetSquare.X] = game.Board[pieceCoords.Y][pieceCoords.X]
 	game.Board[pieceCoords.Y][pieceCoords.X] = CheckersPiece{}
-	//TODO capture logic, game over logic
-
+	game.PiecePositions[truePieceID] = targetSquare
+	game.GameStatus = game.checkGameStatus()
 }
 
 func (game *CheckersGame) DisplayBoard(playerNum int) string {
@@ -319,4 +343,36 @@ func applyMove(srcSquare vector.Vector, direction CheckersDirection) vector.Vect
 func (game *CheckersGame) isSquareEmpty(coords vector.Vector) bool {
 	piece := game.Board[coords.Y][coords.X]
 	return piece.Color == ""
+}
+
+func (game *CheckersGame) isSquareOutOfBounds(targetSquare vector.Vector) bool {
+	return targetSquare.X < 0 || targetSquare.X > 7 || targetSquare.Y < 0 || targetSquare.Y > 7
+}
+
+func (game *CheckersGame) capturePiece(targetSquare vector.Vector) {
+	targetPiece := game.Board[targetSquare.Y][targetSquare.X]
+	if targetPiece.ID == 0 {
+		panic("no piece on this square - did validation run?")
+	}
+
+	if targetPiece.Color == pieceWhite {
+		game.whitePieceCount--
+	} else {
+		game.blackPieceCount--
+	}
+	delete(game.PiecePositions, targetPiece.ID)
+	game.Board[targetSquare.Y][targetSquare.X] = CheckersPiece{}
+	log.Printf("Capture a piece at %v, %v", targetSquare.X, targetSquare.Y)
+}
+
+func (game *CheckersGame) checkGameStatus() GameStatus {
+	if game.whitePieceCount == 0 {
+		return GameStatusPlayer2Win
+	}
+
+	if game.blackPieceCount == 0 {
+		return GameStatusPlayer1Win
+	}
+
+	return GameStatusOngoing
 }

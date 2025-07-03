@@ -6,7 +6,7 @@ import (
 	"github.com/wbarthol/ascii-arcade-2/internal/vector"
 )
 
-func TestValidateMove(t *testing.T) {
+func TestTicTacToeValidateMove(t *testing.T) {
 	game := NewTicTacToeGame()
 	coords := vector.Vector{X: 1, Y: 1}
 	turn := TicTacToeTurn{Coords: coords}
@@ -33,7 +33,7 @@ func TestValidateMove(t *testing.T) {
 	}
 }
 
-func TestExecuteTurn(t *testing.T) {
+func TestTicTacToeExecuteTurn(t *testing.T) {
 	game := NewTicTacToeGame()
 
 	tests := []struct {
