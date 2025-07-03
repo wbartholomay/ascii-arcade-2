@@ -192,21 +192,22 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string{
 	isOpponentPieceOnDest := targetPiece.Color != "" && targetPiece.Color != piece.Color
 
 	//assume validation has already run, and destination being occupied by opponent means capture
+	msg := ""
 	if isOpponentPieceOnDest {
 		game.capturePiece(targetSquare)
 		targetSquare = applyMove(targetSquare, trueDirection)
 		if piece.Color == pieceWhite {
-			return "captured a black piece!"
+			msg = "captured a black piece!"
 		} else {
-			return "captured a white piece!"
+			msg = "captured a white piece!"
 		}
 	}
 
-	game.Board[targetSquare.Y][targetSquare.X] = game.Board[pieceCoords.Y][pieceCoords.X]
+	game.Board[targetSquare.Y][targetSquare.X] = piece
 	game.Board[pieceCoords.Y][pieceCoords.X] = CheckersPiece{}
 	game.PiecePositions[truePieceID] = targetSquare
 	game.GameStatus = game.checkGameStatus()
-	return ""
+	return msg
 }
 
 func (game *CheckersGame) DisplayBoard(playerNum int) string {
