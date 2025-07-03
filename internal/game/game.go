@@ -19,8 +19,9 @@ const (
 type Game interface {
 	GetGameType() GameType
 	GetGameStatus() GameStatus
+	GetGameInstructions() string
 	ValidateMove(GameTurn, int) (bool, string)
-	ExecuteTurn(GameTurn, int)
+	ExecuteTurn(GameTurn, int) string
 	DisplayBoard(int) string
 }
 

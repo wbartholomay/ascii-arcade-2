@@ -38,7 +38,6 @@ func (driver *WSDriver) Run() {
 	for {
 		var msg messages.ServerMessage
 		err := driver.conn.ReadJSON(&msg)
-		fmt.Println(msg)
 		// log.Printf("Message from server: %v\n", msg)
 		if !driver.wsOpen {
 			return

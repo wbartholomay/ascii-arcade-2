@@ -83,6 +83,10 @@ func (game *CheckersGame) GetGameStatus() GameStatus {
 	return game.GameStatus
 }
 
+func (game *CheckersGame) GetGameInstructions() string {
+	return "when it is your turn, enter \033[33m move <piece-num> <direction>\033[0m.\nPossible directions are \033[33m'l', 'r', 'bl', 'br'\033[0m. Note that only kings can move backwards."
+}
+
 type CheckersDirection int
 
 const (
@@ -158,7 +162,7 @@ func (game *CheckersGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, 
 	return true, ""
 }
 
-func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {
+func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string{
 	turn, ok := gameTurn.(CheckersTurn)
 	if !ok {
 		panic("server error - sent a turn not of type checkers turn during checkers game")
@@ -191,12 +195,18 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {
 	if isOpponentPieceOnDest {
 		game.capturePiece(targetSquare)
 		targetSquare = applyMove(targetSquare, trueDirection)
+		if piece.Color == pieceWhite {
+			return "captured a black piece!"
+		} else {
+			return "captured a white piece!"
+		}
 	}
 
 	game.Board[targetSquare.Y][targetSquare.X] = game.Board[pieceCoords.Y][pieceCoords.X]
 	game.Board[pieceCoords.Y][pieceCoords.X] = CheckersPiece{}
 	game.PiecePositions[truePieceID] = targetSquare
 	game.GameStatus = game.checkGameStatus()
+	return ""
 }
 
 func (game *CheckersGame) DisplayBoard(playerNum int) string {

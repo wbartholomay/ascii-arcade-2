@@ -37,6 +37,10 @@ func (game *TicTacToeGame) GetGameStatus() GameStatus {
 	return game.GameStatus
 }
 
+func (game *TicTacToeGame) GetGameInstructions() string {
+	return "when it is your turn, enter \033[33m move <row-num> <col-num>\033[0m."
+}
+
 func (game *TicTacToeGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, string) {
 	turn, ok := gameTurn.(TicTacToeTurn)
 	if !ok {
@@ -66,7 +70,7 @@ func (turn TicTacToeTurn) GetGameType() GameType{
 }
 
 // ExecuteTurn - Takes coordinates and a player number, executes turn.
-func (game *TicTacToeGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {
+func (game *TicTacToeGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string{
 	turn, ok := gameTurn.(TicTacToeTurn)
 	if !ok {
 		panic("server error - sent a turn not of type tictactoe turn during tictactoe game")
@@ -80,6 +84,7 @@ func (game *TicTacToeGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {
 	game.Board[coords.Y][coords.X] = playerSquare
 
 	game.GameStatus = game.checkGameStatus()
+	return ""
 }
 
 func (game *TicTacToeGame) DisplayBoard(_ int) string {

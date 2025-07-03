@@ -51,7 +51,7 @@ func GetCommands() map[string]Command {
 		"move": CommandSendTurn{
 			CommandBasic: CommandBasic{
 				name:        "move",
-				description: "select square. Usage: \033[33mmove <row-num> <col-num>\033[0m",
+				description: "select square. Usage: \033[33mTicTacToe: move <row-num> <col-num>. Checkers: move <piece-num> <direction>\033[0m",
 				callback: func(args []string) error {
 					return nil
 				},

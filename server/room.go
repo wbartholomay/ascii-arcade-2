@@ -258,7 +258,7 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 
 		isMoveValid, validationMsg := state.room.game.ValidateMove(msg.TurnAction.GetGameTurn(), playerNumber)
 		if isMoveValid {
-			state.room.game.ExecuteTurn(msg.TurnAction.GetGameTurn(), playerNumber)
+			validationMsg = state.room.game.ExecuteTurn(msg.TurnAction.GetGameTurn(), playerNumber)
 			state.room.advanceTurn()
 		}
 		if state.room.game.GetGameStatus() != game.GameStatusOngoing {
