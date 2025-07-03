@@ -93,7 +93,9 @@ type CheckersTurn struct {
 	Direction CheckersDirection `json:"direction"`
 }
 
-func (turn CheckersTurn) isGameTurn() {}
+func (turn CheckersTurn) GetGameType() GameType{
+	return GameTypeCheckers
+}
 
 // TODO switch this over to returning an error instead of bool + string
 func (game *CheckersGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, string) {
@@ -102,8 +104,15 @@ func (game *CheckersGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, 
 		panic("server error - sent a turn not of type checkers turn during checkers game")
 	}
 
+	var truePieceID int
+	if playerNum == 1 {
+		truePieceID = turn.PieceID + 100
+	} else {
+		truePieceID = turn.PieceID + 200
+	}
+
 	//check selected square
-	pieceCoords, ok := game.PiecePositions[turn.PieceID]
+	pieceCoords, ok := game.PiecePositions[truePieceID]
 	if !ok {
 		return false, fmt.Sprintf("no piece found with ID %v", turn.PieceID)
 	}
@@ -141,7 +150,14 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {
 		panic("server error - sent a turn not of type checkers turn during checkers game")
 	}
 
-	pieceCoords, ok := game.PiecePositions[turn.PieceID]
+	var truePieceID int
+	if playerNum == 1 {
+		truePieceID = turn.PieceID + 100
+	} else {
+		truePieceID = turn.PieceID + 200
+	}
+
+	pieceCoords, ok := game.PiecePositions[truePieceID]
 	if !ok {
 		panic("validation was not called before execution, or it failed")
 	}
@@ -165,7 +181,7 @@ func (game *CheckersGame) DisplayBoard(playerNum int) string {
 		isWhiteTurn = false
 	}
 
-	result := ""
+	result := "\n"
 	board := game.Board
 	rowNum := 0
 	increment := 1

@@ -20,9 +20,10 @@ type RoomChans struct {
 }
 
 type Player struct {
-	notInRoom   PlayerStateNotInRoom
-	waitingRoom PlayerStateWaitingRoom
-	inRoom      PlayerStateInRoom
+	notInRoom       PlayerStateNotInRoom
+	waitingRoom     PlayerStateWaitingRoom
+	inGameSelection PlayerStateInGameSelection
+	inRoom          PlayerStateInRoom
 	// waitForClose   PlayerStateWaitForClose
 	state PlayerState
 
@@ -45,6 +46,7 @@ func NewPlayer(conn *websocket.Conn, roomRequests chan RoomRequest) *Player {
 
 	p.notInRoom = PlayerStateNotInRoom{&p}
 	p.waitingRoom = PlayerStateWaitingRoom{&p}
+	p.inGameSelection = PlayerStateInGameSelection{&p}
 	p.inRoom = PlayerStateInRoom{&p}
 
 	p.state = p.notInRoom
@@ -205,7 +207,7 @@ func (state PlayerStateWaitingRoom) handleRoomMessage(msg messages.ServerMessage
 		}
 	}
 
-	state.player.setState(state.player.inRoom)
+	state.player.setState(state.player.inGameSelection)
 	return nil
 }
 
@@ -236,8 +238,9 @@ func (state PlayerStateInGameSelection) handleRoomMessage(msg messages.ServerMes
 		if err != nil {
 			return err
 		}
+		state.player.setState(state.player.inRoom)
 	default:
-		return fmt.Errorf("unsupported message type while in room: %v", msg.Type)
+		return fmt.Errorf("unsupported message type while in game selection: %v", msg.Type)
 	}
 
 	return nil

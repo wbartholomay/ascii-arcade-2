@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/wbarthol/ascii-arcade-2/internal/messages"
 	"github.com/wbarthol/ascii-arcade-2/internal/game"
+	"github.com/wbarthol/ascii-arcade-2/internal/messages"
 )
 
 type Room struct {
@@ -94,7 +94,7 @@ func (room *Room) endGameOnQuit(quittingPlayerNum int) {
 	if quittingPlayerNum == 1 {
 		p2Message := messages.ServerMessage{
 			Type:       messages.ServerGameFinished,
-			Game:       room.game,
+			Game:       messages.NewGameWrapper(room.game),
 			GameResult: messages.GameResultPlayerWin,
 			Message:    "Player 1 quit.",
 		}
@@ -102,7 +102,7 @@ func (room *Room) endGameOnQuit(quittingPlayerNum int) {
 	} else {
 		p1Message := messages.ServerMessage{
 			Type:       messages.ServerGameFinished,
-			Game:       room.game,
+			Game:       messages.NewGameWrapper(room.game),
 			GameResult: messages.GameResultPlayerWin,
 			Message:    "Player 2 quit.",
 		}
@@ -113,11 +113,11 @@ func (room *Room) endGameOnQuit(quittingPlayerNum int) {
 func (room *Room) endGameOnCompletion() {
 	p1Message := messages.ServerMessage{
 		Type: messages.ServerGameFinished,
-		Game: room.game,
+		Game: messages.NewGameWrapper(room.game),
 	}
 	p2Message := messages.ServerMessage{
 		Type: messages.ServerGameFinished,
-		Game: room.game,
+		Game: messages.NewGameWrapper(room.game),
 	}
 	switch room.game.GetGameStatus() {
 	case game.GameStatusDraw:
@@ -168,10 +168,10 @@ func (state RoomStateWaitingForP2) handleJoinRequest(req RoomRequest) error {
 	}
 
 	state.room.playerOneChans.roomToPlayer <- messages.ServerMessage{
-		Type:         messages.ServerEnteredGameSelection,
+		Type: messages.ServerEnteredGameSelection,
 	}
 	state.room.playerTwoChans.roomToPlayer <- messages.ServerMessage{
-		Type:         messages.ServerEnteredGameSelection,
+		Type: messages.ServerEnteredGameSelection,
 	}
 
 	state.room.SetState(state.room.inGameSelection)
@@ -217,13 +217,14 @@ func (state RoomStateInGameSelection) handlePlayerMessage(msg messages.ClientMes
 		state.room.game = game.NewGame(state.room.gameType)
 		state.room.playerTurn = 1
 
-		state.room.playerOneChans.roomToPlayer <- messages.ServerMessage{Type: messages.ServerGameStarted,
-			Game:       state.room.game,
+		state.room.playerOneChans.roomToPlayer <- messages.ServerMessage{
+			Type:       messages.ServerGameStarted,
+			Game:       messages.NewGameWrapper(state.room.game),
 			PlayerTurn: 1,
 		}
 		state.room.playerTwoChans.roomToPlayer <- messages.ServerMessage{
 			Type:       messages.ServerGameStarted,
-			Game:       state.room.game,
+			Game:       messages.NewGameWrapper(state.room.game),
 			PlayerTurn: 1,
 		}
 
@@ -255,9 +256,9 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 			return fmt.Errorf("received a message from player when it is not their turn")
 		}
 
-		isMoveValid, validationMsg := state.room.game.ValidateMove(msg.TurnAction, playerNumber)
+		isMoveValid, validationMsg := state.room.game.ValidateMove(msg.TurnAction.GetGameTurn(), playerNumber)
 		if isMoveValid {
-			state.room.game.ExecuteTurn(msg.TurnAction, playerNumber)
+			state.room.game.ExecuteTurn(msg.TurnAction.GetGameTurn(), playerNumber)
 			state.room.advanceTurn()
 		}
 		if state.room.game.GetGameStatus() != game.GameStatusOngoing {
@@ -267,7 +268,7 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 
 		serverMsg := messages.ServerMessage{
 			Type:       messages.ServerTurnResult,
-			Game:       state.room.game,
+			Game:       messages.NewGameWrapper(state.room.game),
 			PlayerTurn: state.room.playerTurn,
 			Message:    validationMsg,
 		}

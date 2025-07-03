@@ -61,7 +61,9 @@ type TicTacToeTurn struct {
 	Coords vector.Vector `json:"coords"`
 }
 
-func (turn TicTacToeTurn) isGameTurn() {}
+func (turn TicTacToeTurn) GetGameType() GameType{
+	return GameTypeTicTacToe
+}
 
 // ExecuteTurn - Takes coordinates and a player number, executes turn.
 func (game *TicTacToeGame) ExecuteTurn(gameTurn GameTurn, playerNum int) {

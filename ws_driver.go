@@ -8,9 +8,9 @@ import (
 )
 
 type WSDriver struct {
-	wsOpen       bool
-	conn         *websocket.Conn
-	session      *Session
+	wsOpen          bool
+	conn            *websocket.Conn
+	session         *Session
 	driverToSession chan messages.ServerMessage
 }
 
@@ -21,10 +21,10 @@ func NewWS(url string, session *Session) (*WSDriver, error) {
 	}
 
 	ws := WSDriver{
-		wsOpen:       true,
-		conn:         conn,
-		session:      session,
-		driverToSession:make(chan messages.ServerMessage),
+		wsOpen:          true,
+		conn:            conn,
+		session:         session,
+		driverToSession: make(chan messages.ServerMessage),
 	}
 
 	return &ws, nil
@@ -38,6 +38,7 @@ func (driver *WSDriver) Run() {
 	for {
 		var msg messages.ServerMessage
 		err := driver.conn.ReadJSON(&msg)
+		fmt.Println(msg)
 		// log.Printf("Message from server: %v\n", msg)
 		if !driver.wsOpen {
 			return
@@ -56,7 +57,7 @@ func (driver *WSDriver) CloseWS() {
 	if driver == nil || !driver.wsOpen {
 		return
 	}
-	
+
 	driver.wsOpen = false
 	driver.conn.Close()
 	close(driver.driverToSession)

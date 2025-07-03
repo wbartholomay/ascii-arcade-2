@@ -5,8 +5,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/wbarthol/ascii-arcade-2/internal/messages"
 	"github.com/wbarthol/ascii-arcade-2/internal/game"
+	"github.com/wbarthol/ascii-arcade-2/internal/messages"
 	"github.com/wbarthol/ascii-arcade-2/internal/vector"
 )
 
@@ -34,6 +34,15 @@ func GetCommands() map[string]Command {
 			CommandBasic: CommandBasic{
 				name:        "join",
 				description: "join a room. Usage: \033[33mjoin <room-code>\033[0m",
+				callback: func(args []string) error {
+					return nil
+				},
+			},
+		},
+		"select": CommandSelectGame{
+			CommandBasic: CommandBasic{
+				name:        "select game",
+				description: "select a game. Usage: \033[33mselect <game-number>\033[0m",
 				callback: func(args []string) error {
 					return nil
 				},
@@ -92,7 +101,7 @@ type CommandJoin struct {
 	CommandBasic
 }
 
-func (cmd CommandJoin) CreatePlayerMessage(gameType game.GameType, args []string) (messages.ClientMessage, error) {
+func (cmd CommandJoin) CreatePlayerMessage(_ game.GameType, args []string) (messages.ClientMessage, error) {
 	if len(args) < 1 {
 		return messages.ClientMessage{}, fmt.Errorf("not enough arguments provided. Expecting \033[33m<room-code>\033[0m")
 	}
@@ -101,6 +110,32 @@ func (cmd CommandJoin) CreatePlayerMessage(gameType game.GameType, args []string
 	return messages.ClientMessage{
 		Type:     messages.ClientJoinRoom,
 		RoomCode: roomCode,
+	}, nil
+}
+
+type CommandSelectGame struct {
+	CommandBasic
+}
+
+func (cmd CommandSelectGame) CreatePlayerMessage(_ game.GameType, args []string) (messages.ClientMessage, error) {
+	if len(args) < 1 {
+		return messages.ClientMessage{}, fmt.Errorf("not enough arguments provided. Expecting \033[33m<game-number>\033[0m")
+	}
+	gameNumber := args[0]
+
+	var gameType game.GameType
+	switch gameNumber {
+	case "1":
+		gameType = game.GameTypeTicTacToe
+	case "2":
+		gameType = game.GameTypeCheckers
+	default:
+		return messages.ClientMessage{}, fmt.Errorf("invalid game number. Valid numbers are: " + AnsiYellow + "'1', '2'" + AnsiReset)
+	}
+
+	return messages.ClientMessage{
+		Type:     messages.ClientSelectGameType,
+		GameType: gameType,
 	}, nil
 }
 
@@ -141,14 +176,14 @@ func createTicTacToeTurn(args []string) (messages.ClientMessage, error) {
 
 	return messages.ClientMessage{
 		Type: messages.ClientSendTurn,
-		TurnAction: game.TicTacToeTurn{
+		TurnAction: messages.NewGameTurnWrapper(game.TicTacToeTurn{
 			Coords: coords,
-		},
+		}),
 	}, nil
 }
 
 func createCheckersTurn(args []string) (messages.ClientMessage, error) {
-	if len(args) < 3 {
+	if len(args) < 2 {
 		return messages.ClientMessage{}, fmt.Errorf("not enough arguments provided. Expecting \033[33m<piece-num> <move-direction>\033[0m")
 	}
 
@@ -159,7 +194,7 @@ func createCheckersTurn(args []string) (messages.ClientMessage, error) {
 
 	directionStr := args[1]
 	var direction game.CheckersDirection
-	switch directionStr{
+	switch directionStr {
 	case "l":
 		direction = game.CheckersDirectionLeft
 	case "r":
@@ -174,10 +209,10 @@ func createCheckersTurn(args []string) (messages.ClientMessage, error) {
 
 	return messages.ClientMessage{
 		Type: messages.ClientSendTurn,
-		TurnAction: game.CheckersTurn{
-			PieceID: int(pieceNum),
+		TurnAction: messages.NewGameTurnWrapper(game.CheckersTurn{
+			PieceID:   int(pieceNum),
 			Direction: direction,
-		},
+		}),
 	}, nil
 }
 
@@ -185,7 +220,7 @@ type CommandQuit struct {
 	CommandBasic
 }
 
-func (cmd CommandQuit) CreatePlayerMessage(gameType game.GameType, args []string) (messages.ClientMessage, error) {
+func (cmd CommandQuit) CreatePlayerMessage(_ game.GameType, args []string) (messages.ClientMessage, error) {
 	return messages.ClientMessage{
 		Type: messages.ClientQuitRoom,
 	}, nil

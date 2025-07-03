@@ -44,6 +44,8 @@ func startRepl(session *Session) error {
 			curState = AnsiLightBlue + "Main Menu" + AnsiReset
 		case SessionStateWaitingRoom:
 			curState = AnsiLightRed + "Waiting Room" + AnsiReset
+		case SessionStateInGameSelection:
+			curState = AnsiLightYellow + "Game Selection" + AnsiReset
 		case SessionStateInGame:
 			curState = AnsiLightGreen + "In Game" + AnsiReset
 		}
