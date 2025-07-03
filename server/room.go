@@ -4,18 +4,20 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/wbarthol/ascii-arcade-2/internal/game"
 	"github.com/wbarthol/ascii-arcade-2/internal/messages"
-	"github.com/wbarthol/ascii-arcade-2/internal/tictactoe"
 )
 
 type Room struct {
 	code string
 
-	game       tictactoe.TicTacToeGame
+	gameType   game.GameType
+	game       game.Game
 	playerTurn int
 
 	waitingForPlayerOne RoomStateWaitingForP1
 	waitingForPlayerTwo RoomStateWaitingForP2
+	inGameSelection     RoomStateInGameSelection
 	running             RoomStateRunning
 	state               RoomState
 
@@ -32,6 +34,7 @@ func NewRoom(code string, closeReq chan string) *Room {
 	}
 	room.waitingForPlayerOne = RoomStateWaitingForP1{room}
 	room.waitingForPlayerTwo = RoomStateWaitingForP2{room}
+	room.inGameSelection = RoomStateInGameSelection{room}
 	room.running = RoomStateRunning{room}
 	room.state = &room.waitingForPlayerOne
 	room.requests = make(chan RoomRequest)
@@ -91,7 +94,7 @@ func (room *Room) endGameOnQuit(quittingPlayerNum int) {
 	if quittingPlayerNum == 1 {
 		p2Message := messages.ServerMessage{
 			Type:       messages.ServerGameFinished,
-			Game:       room.game,
+			Game:       messages.NewGameWrapper(room.game),
 			GameResult: messages.GameResultPlayerWin,
 			Message:    "Player 1 quit.",
 		}
@@ -99,7 +102,7 @@ func (room *Room) endGameOnQuit(quittingPlayerNum int) {
 	} else {
 		p1Message := messages.ServerMessage{
 			Type:       messages.ServerGameFinished,
-			Game:       room.game,
+			Game:       messages.NewGameWrapper(room.game),
 			GameResult: messages.GameResultPlayerWin,
 			Message:    "Player 2 quit.",
 		}
@@ -110,34 +113,23 @@ func (room *Room) endGameOnQuit(quittingPlayerNum int) {
 func (room *Room) endGameOnCompletion() {
 	p1Message := messages.ServerMessage{
 		Type: messages.ServerGameFinished,
-		Game: room.game,
+		Game: messages.NewGameWrapper(room.game),
 	}
 	p2Message := messages.ServerMessage{
 		Type: messages.ServerGameFinished,
-		Game: room.game,
+		Game: messages.NewGameWrapper(room.game),
 	}
-	switch room.game.GameStatus {
-	case tictactoe.GameStatusDraw:
+	switch room.game.GetGameStatus() {
+	case game.GameStatusDraw:
 		p1Message.GameResult, p2Message.GameResult = messages.GameResultDraw, messages.GameResultDraw
-	case tictactoe.GameStatusPlayer1Win:
+	case game.GameStatusPlayer1Win:
 		p1Message.GameResult, p2Message.GameResult = messages.GameResultPlayerWin, messages.GameResultPlayerLose
-	case tictactoe.GameStatusPlayer2Win:
+	case game.GameStatusPlayer2Win:
 		p1Message.GameResult, p2Message.GameResult = messages.GameResultPlayerLose, messages.GameResultPlayerWin
 	}
 
 	room.playerOneChans.roomToPlayer <- p1Message
 	room.playerTwoChans.roomToPlayer <- p2Message
-
-	//shut down EVERTYTHIGN
-	// close(room.playerOneChans.roomToPlayer)
-	// close(room.playerTwoChans.roomToPlayer)
-	// room.playerOneChans.playerToRoom = nil
-	// room.playerTwoChans.playerToRoom = nil
-
-	// ch := s.r.close
-	// go func(ch chan string) {
-	// 	ch <- s.r.code
-	// }(ch)
 }
 
 type RoomState interface {
@@ -175,21 +167,15 @@ func (state RoomStateWaitingForP2) handleJoinRequest(req RoomRequest) error {
 		PlayerNumber: 2,
 	}
 
-	state.room.game = tictactoe.NewTicTacToeGame()
-	state.room.playerTurn = 1
-
-	state.room.playerOneChans.roomToPlayer <- messages.ServerMessage{Type: messages.ServerGameStarted,
-		Game:       state.room.game,
-		PlayerTurn: 1,
+	state.room.playerOneChans.roomToPlayer <- messages.ServerMessage{
+		Type: messages.ServerEnteredGameSelection,
 	}
 	state.room.playerTwoChans.roomToPlayer <- messages.ServerMessage{
-		Type:       messages.ServerGameStarted,
-		Game:       state.room.game,
-		PlayerTurn: 1,
+		Type: messages.ServerEnteredGameSelection,
 	}
 
-	state.room.SetState(state.room.running)
-	log.Println("Player two joined room, game started!")
+	state.room.SetState(state.room.inGameSelection)
+	log.Println("Player two joined room, entering game selection.")
 	return nil
 }
 
@@ -205,12 +191,53 @@ func (state RoomStateWaitingForP2) handlePlayerMessage(msg messages.ClientMessag
 	return nil
 }
 
+type RoomStateInGameSelection struct {
+	room *Room
+}
+
+func (state RoomStateInGameSelection) handleJoinRequest(req RoomRequest) error {
+	req.chans.roomToPlayer <- messages.ServerMessage{
+		Type: messages.ServerRoomUnavailable,
+	}
+	return nil
+}
+
+func (state RoomStateInGameSelection) handlePlayerMessage(msg messages.ClientMessage, playerNumber int) error {
+	switch msg.Type {
+	case messages.ClientQuitRoom:
+		//TODO this will tell a player one of them won, which should not happen in game selection
+		state.room.endGameOnQuit(playerNumber)
+		return fmt.Errorf("player %v quit", playerNumber)
+	case messages.ClientSelectGameType:
+		if playerNumber != 1 {
+			return fmt.Errorf("only player 1 can select the game type")
+		}
+		state.room.gameType = msg.GameType
+		log.Printf("Room %v selected game %v", state.room.code, state.room.gameType)
+		state.room.game = game.NewGame(state.room.gameType)
+		state.room.playerTurn = 1
+
+		state.room.playerOneChans.roomToPlayer <- messages.ServerMessage{
+			Type:       messages.ServerGameStarted,
+			Game:       messages.NewGameWrapper(state.room.game),
+			PlayerTurn: 1,
+		}
+		state.room.playerTwoChans.roomToPlayer <- messages.ServerMessage{
+			Type:       messages.ServerGameStarted,
+			Game:       messages.NewGameWrapper(state.room.game),
+			PlayerTurn: 1,
+		}
+
+		state.room.SetState(state.room.running)
+	}
+	return nil
+}
+
 type RoomStateRunning struct {
 	room *Room
 }
 
 func (state RoomStateRunning) handleJoinRequest(req RoomRequest) error {
-	//TODO: Reject join request
 	req.chans.roomToPlayer <- messages.ServerMessage{
 		Type: messages.ServerRoomUnavailable,
 	}
@@ -229,20 +256,21 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 			return fmt.Errorf("received a message from player when it is not their turn")
 		}
 
-		isMoveValid := state.room.game.ValidateMove(msg.TurnAction)
+		isMoveValid, validationMsg := state.room.game.ValidateMove(msg.TurnAction.GetGameTurn(), playerNumber)
 		if isMoveValid {
-			state.room.game.ExecuteTurn(msg.TurnAction, playerNumber)
+			validationMsg = state.room.game.ExecuteTurn(msg.TurnAction.GetGameTurn(), playerNumber)
 			state.room.advanceTurn()
 		}
-		if state.room.game.GameStatus != tictactoe.GameStatusOngoing {
+		if state.room.game.GetGameStatus() != game.GameStatusOngoing {
 			state.room.endGameOnCompletion()
 			return fmt.Errorf("game over, sent results to clients")
 		}
 
 		serverMsg := messages.ServerMessage{
 			Type:       messages.ServerTurnResult,
-			Game:       state.room.game,
+			Game:       messages.NewGameWrapper(state.room.game),
 			PlayerTurn: state.room.playerTurn,
+			Message:    validationMsg,
 		}
 		if !isMoveValid && playerNumber == 1 {
 			state.room.playerOneChans.roomToPlayer <- serverMsg

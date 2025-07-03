@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
+	"github.com/wbarthol/ascii-arcade-2/internal/game"
 	"github.com/wbarthol/ascii-arcade-2/internal/messages"
-	"github.com/wbarthol/ascii-arcade-2/internal/tictactoe"
 )
 
 type ValidationError struct {
@@ -16,16 +16,17 @@ func (err ValidationError) Error() string {
 }
 
 type Session struct {
-	stateInMenu      SessionStateInMenu
-	stateWaitingRoom SessionStateWaitingRoom
-	stateInGame      SessionStateInGame
-	state            SessionState
+	stateInMenu          SessionStateInMenu
+	stateWaitingRoom     SessionStateWaitingRoom
+	stateInGameSelection SessionStateInGameSelection
+	stateInGame          SessionStateInGame
+	state                SessionState
 
 	playerNumber int
 	playerTurn   int
 
-	//TODO make this an interface to allow for many game types
-	game tictactoe.TicTacToeGame
+	gameType game.GameType
+	game     game.Game
 
 	sessionToOutput chan string
 	driverToSession chan messages.ServerMessage
@@ -37,10 +38,13 @@ func NewSession(serverUrl string) *Session {
 	//Could move the dialing to StartWS
 	session := Session{
 		sessionToOutput: make(chan string, 10),
-		serverUrl: serverUrl,
+		serverUrl:       serverUrl,
 	}
 
 	session.stateInMenu = SessionStateInMenu{
+		session: &session,
+	}
+	session.stateInGameSelection = SessionStateInGameSelection{
 		session: &session,
 	}
 	session.stateWaitingRoom = SessionStateWaitingRoom{
@@ -85,7 +89,7 @@ func (session Session) isPlayerTurn() bool {
 }
 
 func (session *Session) displayBoardToUser() {
-	session.sessionToOutput <- session.game.DisplayBoard()
+	session.sessionToOutput <- session.game.DisplayBoard(session.playerNumber)
 	if session.isPlayerTurn() {
 		session.sessionToOutput <- "Your turn, make a move."
 	} else {
@@ -93,8 +97,18 @@ func (session *Session) displayBoardToUser() {
 	}
 }
 
+func (session *Session) handleRoomClosure(msg messages.ServerMessage) {
+	if session.state == session.stateInGame {
+		session.handleGameOver(msg.GameResult, msg.Message)
+		return
+	}
+
+	session.sessionToOutput <- "a player has quit, closing the room."
+	session.setState(session.stateInMenu)
+}
+
 func (session *Session) handleGameOver(gameResult messages.GameResult, detailsFromServer string) {
-	session.sessionToOutput <- session.game.DisplayBoard()
+	session.sessionToOutput <- session.game.DisplayBoard(session.playerNumber)
 	if detailsFromServer != "" {
 		session.sessionToOutput <- detailsFromServer
 	}
@@ -123,18 +137,25 @@ func (session *Session) HandlePlayerMessage(msg messages.ClientMessage) error {
 }
 
 func (session *Session) setState(state SessionState) {
-	playerMessage := ""
 	switch state.(type) {
 	case SessionStateInMenu:
-		playerMessage = "Exiting to main menu."
+		session.sessionToOutput <- "Exiting to main menu."
+		session.sessionToOutput <- "Welcome to ASCII arcade! Enter \033[33mjoin <room-code>\033[0m to create/join a room, or enter \033[33mhelp\033[0m to see a list of commands."
 		session.wsDriver.CloseWS()
 		session.wsDriver = nil
 	case SessionStateWaitingRoom:
-		playerMessage = "Entering waiting room."
+		session.sessionToOutput <- "Entering waiting room."
+	case SessionStateInGameSelection:
+		if session.playerNumber == 1 {
+			session.sessionToOutput <- fmt.Sprintf("%vSelect%v a game \n%v1.%v TicTacToe\n%v2%v. Checkers", AnsiYellow, AnsiReset, AnsiYellow, AnsiReset, AnsiYellow, AnsiReset)
+		} else {
+			session.sessionToOutput <- "Waiting on Player 1 to select a game..."
+		}
 	case SessionStateInGame:
-		playerMessage = "Opponent found, joining game!"
+		session.sessionToOutput <- "Opponent found, joining game!"
+		session.sessionToOutput <- session.game.GetGameInstructions()
 	}
-	session.sessionToOutput <- playerMessage
+
 	session.state = state
 }
 
@@ -184,11 +205,11 @@ type SessionStateWaitingRoom struct {
 
 func (state SessionStateWaitingRoom) handleServerMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
-	case messages.ServerGameStarted:
-		state.session.game = msg.Game
-		state.session.playerTurn = msg.PlayerTurn
-		state.session.setState(state.session.stateInGame)
-		state.session.displayBoardToUser()
+	case messages.ServerGameFinished:
+		state.session.game = msg.Game.GetGame()
+		state.session.handleRoomClosure(msg)
+	case messages.ServerEnteredGameSelection:
+		state.session.setState(state.session.stateInGameSelection)
 	default:
 		return fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.Type)
 	}
@@ -213,6 +234,52 @@ func (state SessionStateWaitingRoom) handlePlayerMessage(msg messages.ClientMess
 	return nil
 }
 
+type SessionStateInGameSelection struct {
+	session *Session
+}
+
+func (state SessionStateInGameSelection) handleServerMessage(msg messages.ServerMessage) error {
+	switch msg.Type {
+	case messages.ServerGameStarted:
+		state.session.game = msg.Game.GetGame()
+		state.session.gameType = state.session.game.GetGameType()
+		state.session.playerTurn = msg.PlayerTurn
+		state.session.setState(state.session.stateInGame)
+		state.session.displayBoardToUser()
+	case messages.ServerGameFinished:
+		state.session.game = msg.Game.GetGame()
+		state.session.handleRoomClosure(msg)
+	}
+	return nil
+}
+
+func (state SessionStateInGameSelection) handlePlayerMessage(msg messages.ClientMessage) error {
+	switch msg.Type {
+	case messages.ClientQuitRoom:
+		err := state.session.WriteToServer(msg)
+		if err != nil {
+			return err
+		}
+		state.session.setState(state.session.stateInMenu)
+	case messages.ClientSelectGameType:
+		if state.session.playerNumber != 1 {
+			return ValidationError{
+				errorMsg: "only player 1 can select a game",
+			}
+		}
+		err := state.session.WriteToServer(msg)
+		if err != nil {
+			return err
+		}
+	default:
+		return ValidationError{
+			errorMsg: fmt.Sprintf("unexpected player message type while in game: %v", msg.Type),
+		}
+	}
+
+	return nil
+}
+
 type SessionStateInGame struct {
 	session *Session
 }
@@ -222,16 +289,19 @@ func (state SessionStateInGame) handleServerMessage(msg messages.ServerMessage) 
 	case messages.ServerTurnResult:
 		moveFailed := msg.PlayerTurn == state.session.playerTurn
 		if moveFailed {
-			state.session.sessionToOutput <- "Move invalid - please enter a valid move"
+			state.session.sessionToOutput <- AnsiRed + "Move invalid - " + msg.Message + AnsiReset
 			return nil
 		}
 
-		state.session.game = msg.Game
+		state.session.game = msg.Game.GetGame()
 		state.session.playerTurn = msg.PlayerTurn
+		if msg.Message != "" {
+			state.session.sessionToOutput <- AnsiBlue + msg.Message + AnsiReset
+		}
 		state.session.displayBoardToUser()
 	case messages.ServerGameFinished:
-		state.session.game = msg.Game
-		state.session.handleGameOver(msg.GameResult, msg.Message)
+		state.session.game = msg.Game.GetGame()
+		state.session.handleRoomClosure(msg)
 	default:
 		return fmt.Errorf("unexpected server message type whle in game: %v", msg.Type)
 	}

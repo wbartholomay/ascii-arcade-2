@@ -1,4 +1,4 @@
-package tictactoe
+package game
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/wbarthol/ascii-arcade-2/internal/vector"
 )
 
-func TestValidateMove(t *testing.T) {
+func TestTicTacToeValidateMove(t *testing.T) {
 	game := NewTicTacToeGame()
 	coords := vector.Vector{X: 1, Y: 1}
 	turn := TicTacToeTurn{Coords: coords}
@@ -25,7 +25,7 @@ func TestValidateMove(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			turn := TicTacToeTurn{Coords: tt.coords}
-			result := game.ValidateMove(turn)
+			result, _ := game.ValidateMove(turn, 1)
 			if result != tt.expected {
 				t.Errorf("ValidateMove(%v) = %v, expected %v", tt.coords, result, tt.expected)
 			}
@@ -33,7 +33,7 @@ func TestValidateMove(t *testing.T) {
 	}
 }
 
-func TestExecuteTurn(t *testing.T) {
+func TestTicTacToeExecuteTurn(t *testing.T) {
 	game := NewTicTacToeGame()
 
 	tests := []struct {
@@ -42,9 +42,9 @@ func TestExecuteTurn(t *testing.T) {
 		playerNum      int
 		expectedSquare TicTacToeSquare
 	}{
-		{"Player 1 places X", vector.Vector{X: 0, Y: 0}, 1, SquareX},
-		{"Player 2 places O", vector.Vector{X: 1, Y: 1}, 2, SquareO},
-		{"Player 1 places another X", vector.Vector{X: 2, Y: 2}, 1, SquareX},
+		{"Player 1 places X", vector.Vector{X: 0, Y: 0}, 1, TicTacToeSquareX},
+		{"Player 2 places O", vector.Vector{X: 1, Y: 1}, 2, TicTacToeSquareO},
+		{"Player 1 places another X", vector.Vector{X: 2, Y: 2}, 1, TicTacToeSquareX},
 	}
 
 	for _, tt := range tests {

@@ -14,6 +14,7 @@ const (
 	AnsiBlue       = "\033[34m"
 	AnsiLightRed   = "\033[91m"
 	AnsiLightGreen = "\033[92m"
+	AnsiLightYellow = "\033[93m"
 	AnsiLightBlue  = "\033[94m"
 )
 
