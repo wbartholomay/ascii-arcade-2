@@ -12,8 +12,12 @@ A multiplayer terminal-based arcade featuring classic board games, written in Go
 ```
  
 ## 🎲 Available Games
-- TicTacToe
-- Checkers
+
+### TicTacToe
+![Tic Tac Toe Board](./images/tic-tac-toe-board.png)
+
+### Checkers
+![Checkers Board](./images/checkers-board.png)
 
 ## 🚀 Getting Started
 
@@ -40,6 +44,10 @@ A multiplayer terminal-based arcade featuring classic board games, written in Go
    ./ascii-arcade
    ```
 
-## 🎯 Roadmap
+## �️ Architecture
+
+![ASCII Arcade Data Flow](./images/ascii-arcade-data-flow.png)
+
+## �🎯 Roadmap
 - [ ] **Singleplayer** vs. AI
 - [ ] **Chess** implementation
