@@ -1,6 +1,6 @@
 # ASCII Arcade 🎮
 
-A multiplayer terminal-based arcade featuring classic board games with beautiful ASCII art interfaces. Play Tic Tac Toe and Checkers with friends over the internet!
+A multiplayer terminal-based arcade featuring classic board games, written in Go.
 
 ```
  █████╗ ███████╗ ██████╗██╗██╗     █████╗ ██████╗  ██████╗ █████╗ ██████╗ ███████╗
@@ -10,7 +10,7 @@ A multiplayer terminal-based arcade featuring classic board games with beautiful
 ██║  ██║███████║╚██████╗██║██║    ██║  ██║██║  ██║╚██████╗██║  ██║██████╔╝███████╗
 ╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚═╝    ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝ ╚══════╝
 ```
-
+ 
 ## 🎲 Available Games
 - TicTacToe
 - Checkers
@@ -39,7 +39,7 @@ A multiplayer terminal-based arcade featuring classic board games with beautiful
    ```bash
    ./ascii-arcade
    ```
-   
+
 ## 🎯 Roadmap
 - [ ] **Singleplayer** vs. AI
 - [ ] **Chess** implementation
