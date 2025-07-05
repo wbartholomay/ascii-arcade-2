@@ -203,6 +203,12 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string{
 		}
 	}
 
+	//check for kings
+	isPieceOnLastRow := playerNum == 1 && targetSquare.Y == 0 || playerNum == 2 && targetSquare.Y == 7
+	if isPieceOnLastRow {
+		piece.IsKing = true
+	}
+
 	game.Board[targetSquare.Y][targetSquare.X] = piece
 	game.Board[pieceCoords.Y][pieceCoords.X] = CheckersPiece{}
 	game.PiecePositions[truePieceID] = targetSquare
