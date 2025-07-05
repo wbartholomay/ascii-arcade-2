@@ -41,11 +41,5 @@ A multiplayer terminal-based arcade featuring classic board games with beautiful
    ```
    
 ## 🎯 Roadmap
-
+- [ ] **Singleplayer** vs. AI
 - [ ] **Chess** implementation
-- [ ] **Spectator mode** for watching games
-- [ ] **Game replay** system
-- [ ] **Player statistics** and rankings
-- [ ] **Tournament mode** with brackets
-- [ ] **Custom themes** and board styles
-- [ ] **Mobile-friendly** web interface
