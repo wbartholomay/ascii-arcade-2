@@ -1,4 +1,4 @@
-# ASCII Arcade 🎮
+# ASCII Arcade
 
 A multiplayer terminal-based arcade featuring classic board games, written in Go.
 
@@ -11,7 +11,7 @@ A multiplayer terminal-based arcade featuring classic board games, written in Go
 ╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚═╝    ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝ ╚══════╝
 ```
  
-## 🎲 Available Games
+## Available Games
 
 ### TicTacToe
 ![Tic Tac Toe Board](./images/tic-tac-toe-board.png)
@@ -19,7 +19,7 @@ A multiplayer terminal-based arcade featuring classic board games, written in Go
 ### Checkers
 ![Checkers Board](./images/checkers-board.png)
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Go 1.24.4 or later
@@ -44,10 +44,10 @@ A multiplayer terminal-based arcade featuring classic board games, written in Go
    ./ascii-arcade
    ```
 
-## �️ Architecture
+## Dataflow Design
 
 ![ASCII Arcade Data Flow](./images/ascii-arcade-data-flow.png)
 
-## �🎯 Roadmap
+## Planned Features
 - [ ] **Singleplayer** vs. AI
 - [ ] **Chess** implementation
