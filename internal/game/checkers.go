@@ -162,7 +162,8 @@ func (game *CheckersGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, 
 	return true, ""
 }
 
-func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string{
+// Execute turn - executes turn and returns if the player should repeat their turn + a message
+func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string {
 	turn, ok := gameTurn.(CheckersTurn)
 	if !ok {
 		panic("server error - sent a turn not of type checkers turn during checkers game")
@@ -193,6 +194,7 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string{
 
 	//assume validation has already run, and destination being occupied by opponent means capture
 	msg := ""
+	// doubleJumpMoves := make([]string, 0)
 	if isOpponentPieceOnDest {
 		game.capturePiece(targetSquare)
 		targetSquare = applyMove(targetSquare, trueDirection)
@@ -201,6 +203,7 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string{
 		} else {
 			msg = "captured a white piece!"
 		}
+		// doubleJumpMoves = game.checkSurroundingSquaresForCapture(targetSquare)
 	}
 
 	//check for kings
@@ -213,7 +216,51 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string{
 	game.Board[pieceCoords.Y][pieceCoords.X] = CheckersPiece{}
 	game.PiecePositions[truePieceID] = targetSquare
 	game.GameStatus = game.checkGameStatus()
+
 	return msg
+}
+
+func (game *CheckersGame) checkSurroundingSquaresForCapture(square vector.Vector) []string {
+	piece := game.Board[square.Y][square.X]
+	captureMoves := []string{}
+
+	//if the piece is not a king, only check forward moves. Otherwise, check all directions
+	moves := []string{"l", "r"}
+	if piece.IsKing {
+		moves = append(moves, "bl", "br")
+	}
+
+	for _, moveStr := range moves {
+		//TODO
+		// move := MovesMap[moveStr]
+		move := CheckersDirectionLeft
+
+		if piece.Color == pieceBlack {
+			move = convertDirectionFromBlackToWhite(move)
+		}
+
+		targetSquare := applyMove(square, move)
+		if game.isSquareOutOfBounds(targetSquare) {
+			continue
+		}
+		targetPiece := game.Board[targetSquare.Y][targetSquare.X]
+		isOpponentPieceOnDest := targetPiece.Color != "" && targetPiece.Color != piece.Color
+		if !isOpponentPieceOnDest {
+			continue
+		}
+
+		squareBehindTarget := applyMove(targetSquare, move)
+		if game.isSquareOutOfBounds(squareBehindTarget) {
+			continue
+		}
+		if !game.isSquareEmpty(squareBehindTarget) {
+			continue
+		}
+
+		captureMoves = append(captureMoves, moveStr)
+	}
+
+	return captureMoves
 }
 
 func (game *CheckersGame) DisplayBoard(playerNum int) string {
