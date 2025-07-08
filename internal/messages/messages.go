@@ -54,9 +54,9 @@ const (
 	ServerRoomDisconnected
 	ServerGameFinished
 	ServerRoomUnavailable
+	ServerError
 )
 
-//TODO add omitempty to certain fields
 
 type ServerMessage struct {
 	Type         ServerMessageType `json:"type"`
@@ -65,16 +65,17 @@ type ServerMessage struct {
 	Game         GameWrapper       `json:"game"`
 	GameResult   GameResult        `json:"game_result"`
 	Message      string            `json:"message"`
+	ErrorMessage string            `json:"error_message"`
 }
 
 type GameTurnWrapper struct {
-	GameType          game.GameType      `json:"game_type"`
-	TicTacToeTurn game.TicTacToeTurn `json:"tictactoe_turn,omitempty"`
-	CheckersTurn  game.CheckersTurn  `json:"checkers_turn,omitempty"`
+	GameType      game.GameType      `json:"game_type"`
+	TicTacToeTurn game.TicTacToeTurn `json:"tictactoe_turn"`
+	CheckersTurn  game.CheckersTurn  `json:"checkers_turn"`
 }
 
 func (wrapper *GameTurnWrapper) GetGameTurn() game.GameTurn {
-	switch wrapper.GameType{
+	switch wrapper.GameType {
 	case game.GameTypeTicTacToe:
 		return wrapper.TicTacToeTurn
 	case game.GameTypeCheckers:
@@ -114,5 +115,5 @@ type ClientMessage struct {
 	Type       ClientMessageType `json:"type"`
 	RoomCode   string            `json:"room_code"`
 	GameType   game.GameType     `json:"game_type"`
-	TurnAction GameTurnWrapper    `json:"turn_action"`
+	TurnAction GameTurnWrapper   `json:"turn_action"`
 }

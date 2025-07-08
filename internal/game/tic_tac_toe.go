@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/wbarthol/ascii-arcade-2/internal/vector"
 )
 
@@ -65,12 +66,12 @@ type TicTacToeTurn struct {
 	Coords vector.Vector `json:"coords"`
 }
 
-func (turn TicTacToeTurn) GetGameType() GameType{
+func (turn TicTacToeTurn) GetGameType() GameType {
 	return GameTypeTicTacToe
 }
 
 // ExecuteTurn - Takes coordinates and a player number, executes turn.
-func (game *TicTacToeGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string{
+func (game *TicTacToeGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string {
 	turn, ok := gameTurn.(TicTacToeTurn)
 	if !ok {
 		panic("server error - sent a turn not of type tictactoe turn during tictactoe game")
@@ -87,37 +88,100 @@ func (game *TicTacToeGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string{
 	return ""
 }
 
-func (game *TicTacToeGame) DisplayBoard(_ int) string {
+func (game *TicTacToeGame) DisplayBoard(cursorPosition vector.Vector, _ int) string {
+	// Define styles
+	headerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#6366F1")).
+		Padding(0, 1).
+		MarginBottom(1)
+
+	boardStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#6366F1")).
+		Padding(1)
+
+	xStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#EF4444"))
+
+	oStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#3B82F6"))
+
+	cursorStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#10B981")).
+		Bold(true)
+
+	// Create header
+	header := headerStyle.Render("TIC TAC TOE")
+
+	// Column headers
+	columnHeaders := "        0       1       2   "
+
+	// Build the grid
 	var result string
-	result += "\n   0   1   2\n"
+	result += "  ┌───────┬───────┬───────┐\n"
 
-	for i, row := range game.Board {
-		result += fmt.Sprintf("%d ", i)
-		for j, square := range row {
-			var symbol string
-			switch square {
-			case TicTacToeSquareEmpty:
-				symbol = " "
-			case TicTacToeSquareX:
-				symbol = "\033[31mX\033[0m"
-			case TicTacToeSquareO:
-				symbol = "\033[34mO\033[0m"
-			}
-
-			if j < len(row)-1 {
-				result += fmt.Sprintf(" %s |", symbol)
+	for i := 0; i < 3; i++ {
+		// Empty row above content for height
+		result += "  │"
+		for j := 0; j < 3; j++ {
+			if cursorPosition.Equals(vector.NewVector(j, i)) {
+				result += cursorStyle.Render("       ") + "│"
 			} else {
-				result += fmt.Sprintf(" %s ", symbol)
+				result += "       │"
 			}
 		}
 		result += "\n"
 
-		if i < len(game.Board)-1 {
-			result += "  ---|---|---\n"
+		// Content row with row number
+		result += fmt.Sprintf("%d │", i)
+		for j := 0; j < 3; j++ {
+			var symbol string
+			switch game.Board[i][j] {
+			case TicTacToeSquareEmpty:
+				symbol = " "
+			case TicTacToeSquareX:
+				symbol = xStyle.Render("X")
+			case TicTacToeSquareO:
+				symbol = oStyle.Render("O")
+			}
+
+			if cursorPosition.Equals(vector.NewVector(j, i)) {
+				content := cursorStyle.Render(fmt.Sprintf("   %s   ", symbol))
+				result += content + "│"
+			} else {
+				result += fmt.Sprintf("   %s   │", symbol)
+			}
+		}
+		result += "\n"
+
+		// Empty row below content for height
+		result += "  │"
+		for j := 0; j < 3; j++ {
+			if cursorPosition.Equals(vector.NewVector(j, i)) {
+				result += cursorStyle.Render("       ") + "│"
+			} else {
+				result += "       │"
+			}
+		}
+		result += "\n"
+
+		// Add horizontal separator (except after last row)
+		if i < 2 {
+			result += "  ├───────┼───────┼───────┤\n"
 		}
 	}
-	result += "\n"
-	return result
+
+	result += "  └───────┴───────┴───────┘"
+
+	// Combine everything
+	gridWithHeaders := lipgloss.JoinVertical(lipgloss.Left, columnHeaders, result)
+	styledBoard := boardStyle.Render(gridWithHeaders)
+
+	return lipgloss.JoinVertical(lipgloss.Center, header, styledBoard)
 }
 
 // Could find some more efficient solution (ex: associating different decimal values with each board space)

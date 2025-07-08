@@ -13,5 +13,5 @@ func main() {
 
 	http.HandleFunc("/", hub.ServeWs)
 
-	http.ListenAndServe(":8000", nil)
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }

@@ -1,10 +1,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/textarea"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/wbarthol/ascii-arcade-2/internal/game"
 	"github.com/wbarthol/ascii-arcade-2/internal/messages"
+	"github.com/wbarthol/ascii-arcade-2/internal/vector"
 )
 
 type ValidationError struct {
@@ -15,12 +20,26 @@ func (err ValidationError) Error() string {
 	return err.errorMsg
 }
 
+type ServerMsg struct {
+	msg          messages.ServerMessage
+	serverClosed bool
+}
+
+type SentClientMsg struct{}
+
+type ErrMsg struct {
+	err error
+}
+
+func (msg ErrMsg) Error() string {
+	return msg.err.Error()
+}
+
 type Session struct {
-	stateInMenu          SessionStateInMenu
-	stateWaitingRoom     SessionStateWaitingRoom
-	stateInGameSelection SessionStateInGameSelection
-	stateInGame          SessionStateInGame
-	state                SessionState
+	state SessionState
+
+	waitingForServerResponse bool
+	errMsg                   string
 
 	playerNumber int
 	playerTurn   int
@@ -28,312 +47,548 @@ type Session struct {
 	gameType game.GameType
 	game     game.Game
 
-	sessionToOutput chan string
 	driverToSession chan messages.ServerMessage
 	wsDriver        *WSDriver
 	serverUrl       string
 }
 
-func NewSession(serverUrl string) *Session {
-	//Could move the dialing to StartWS
+func NewSession(serverUrl string) Session {
 	session := Session{
-		sessionToOutput: make(chan string, 10),
 		serverUrl:       serverUrl,
+		driverToSession: make(chan messages.ServerMessage),
 	}
+	session.state = NewSessionStateInMenu()
 
-	session.stateInMenu = SessionStateInMenu{
-		session: &session,
-	}
-	session.stateInGameSelection = SessionStateInGameSelection{
-		session: &session,
-	}
-	session.stateWaitingRoom = SessionStateWaitingRoom{
-		session: &session,
-	}
-	session.stateInGame = SessionStateInGame{
-		session: &session,
-	}
-	session.state = session.stateInMenu
-
-	return &session
+	return session
 }
 
-func (session *Session) StartWS(url string) error {
-	wsDriver, err := NewWS(url, session)
+func (session Session) StartWS(url string) (Session, error) {
+	wsDriver, err := NewWS(url, &session)
 	if err != nil {
-		return fmt.Errorf("error starting WS: %w", err)
+		return session, fmt.Errorf("error starting WS: %w", err)
 	}
 	session.wsDriver = wsDriver
 	session.driverToSession = wsDriver.driverToSession
 	go session.wsDriver.Run()
-	go session.Run()
-	return nil
+	return session, nil
 }
 
-func (session *Session) Run() {
+func (session Session) ListenToServer() tea.Cmd {
 	//Decoupling this from WSDriver with singleplayer in mind
-	for {
+	return func() tea.Msg {
 		msg, ok := <-session.driverToSession
 		if !ok {
-			if session.state != session.stateInMenu {
-				session.setState(session.stateInMenu)
+			if session.state.GetType() != SessionStateTypeInMenu {
+				return ServerMsg{msg: msg, serverClosed: true}
 			}
-			return
 		}
-		session.state.handleServerMessage(msg)
+		return ServerMsg{msg: msg}
 	}
 }
 
-func (session Session) isPlayerTurn() bool {
-	return session.playerNumber == session.playerTurn
+func (session Session) Init() tea.Cmd {
+	return session.ListenToServer()
 }
 
-func (session *Session) displayBoardToUser() {
-	session.sessionToOutput <- session.game.DisplayBoard(session.playerNumber)
-	if session.isPlayerTurn() {
-		session.sessionToOutput <- "Your turn, make a move."
-	} else {
-		session.sessionToOutput <- "Waiting on opponents move..."
+func (session Session) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		session.errMsg = ""
+		switch msg.String() {
+		case "ctrl+c":
+			return session, tea.Quit
+		default:
+			//TODO if waitingForServerResponse, input should be rejected and error msg sent to client
+			return session.state.HandleUserInput(msg, session)
+		}
+	case ServerMsg:
+		session.waitingForServerResponse = false
+		if msg.serverClosed {
+			//TODO Notify client the server closed
+			session = session.setState(SessionStateTypeInMenu)
+		} else {
+			var err error
+			session, err = session.state.handleServerMessage(session, msg.msg)
+			if err != nil {
+				session.errMsg = err.Error()
+			}
+		}
+		return session, session.ListenToServer()
+	case SentClientMsg:
+		session.waitingForServerResponse = true
+	case ErrMsg:
+		session.errMsg = msg.Error()
+	}
+
+	return session, nil
+}
+
+func (session Session) View() string {
+	s := session.state.GetDisplayString()
+	if session.errMsg != "" {
+		s += AnsiRed + session.errMsg + "\n" + AnsiReset
+	}
+	return s
+}
+
+func SendMsgToServer(msg messages.ClientMessage, session Session) tea.Cmd {
+	return func() tea.Msg {
+		err := session.WriteToServer(msg)
+		//TODO figure out error handling
+		if err != nil {
+			return ErrMsg{err}
+		}
+		//TODO what to return?
+		return SentClientMsg{}
 	}
 }
 
-func (session *Session) handleRoomClosure(msg messages.ServerMessage) {
-	if session.state == session.stateInGame {
-		session.handleGameOver(msg.GameResult, msg.Message)
-		return
+func (session Session) handleRoomClosure(msg messages.ServerMessage) Session {
+	if session.state.GetType() == SessionStateTypeInGame {
+		session = session.handleGameOver(msg.GameResult, msg.Message)
+		return session
 	}
 
-	session.sessionToOutput <- "a player has quit, closing the room."
-	session.setState(session.stateInMenu)
+	// session.sessionToOutput <- "a player has quit, closing the room."
+	session = session.setState(SessionStateTypeInMenu)
+	return session
 }
 
-func (session *Session) handleGameOver(gameResult messages.GameResult, detailsFromServer string) {
-	session.sessionToOutput <- session.game.DisplayBoard(session.playerNumber)
-	if detailsFromServer != "" {
-		session.sessionToOutput <- detailsFromServer
-	}
+func (session Session) handleGameOver(gameResult messages.GameResult, detailsFromServer string) Session {
+	// if detailsFromServer != "" {
+	// 	session.sessionToOutput <- detailsFromServer
+	// }
 
-	resultStr := ""
+	resultStr := detailsFromServer + "\n"
 	switch gameResult {
 	case messages.GameResultPlayerWin:
-		resultStr = AnsiGreen + "You won!" + AnsiReset
+		resultStr += AnsiGreen + "You won!" + AnsiReset
 	case messages.GameResultPlayerLose:
-		resultStr = AnsiRed + "You lost :(" + AnsiReset
+		resultStr += AnsiRed + "You lost :(" + AnsiReset
 	case messages.GameResultDraw:
-		resultStr = AnsiBlue + "It's a tie." + AnsiReset
+		resultStr += AnsiBlue + "It's a tie." + AnsiReset
 	default:
 		panic("server error - game status not accounted for")
 	}
-	session.sessionToOutput <- resultStr
-	session.setState(session.stateInMenu)
+	session = session.setState(SessionStateTypeInMenu)
+	//TODO need other way to display variable information
+	session.errMsg = resultStr
+	//TODO
+	return session
 }
 
-func (session *Session) WriteToServer(msg messages.ClientMessage) error {
+func (session Session) WriteToServer(msg messages.ClientMessage) error {
 	return session.wsDriver.WriteToServer(msg)
 }
 
-func (session *Session) HandlePlayerMessage(msg messages.ClientMessage) error {
-	return session.state.handlePlayerMessage(msg)
-}
-
-func (session *Session) setState(state SessionState) {
-	switch state.(type) {
-	case SessionStateInMenu:
-		session.sessionToOutput <- "Exiting to main menu."
-		session.sessionToOutput <- "Welcome to ASCII arcade! Enter \033[33mjoin <room-code>\033[0m to create/join a room, or enter \033[33mhelp\033[0m to see a list of commands."
+func (session Session) setState(state SessionStateType) Session {
+	switch state {
+	case SessionStateTypeInMenu:
 		session.wsDriver.CloseWS()
 		session.wsDriver = nil
-	case SessionStateWaitingRoom:
-		session.sessionToOutput <- "Entering waiting room."
-	case SessionStateInGameSelection:
-		if session.playerNumber == 1 {
-			session.sessionToOutput <- fmt.Sprintf("%vSelect%v a game \n%v1.%v TicTacToe\n%v2%v. Checkers", AnsiYellow, AnsiReset, AnsiYellow, AnsiReset, AnsiYellow, AnsiReset)
-		} else {
-			session.sessionToOutput <- "Waiting on Player 1 to select a game..."
-		}
-	case SessionStateInGame:
-		session.sessionToOutput <- "Opponent found, joining game!"
-		session.sessionToOutput <- session.game.GetGameInstructions()
+		session.driverToSession = make(chan messages.ServerMessage)
+		session.state = NewSessionStateInMenu()
+	case SessionStateTypeWaitingRoom:
+		session.state = NewSessionStateWaitingRoom()
+	case SessionStateTypeGameSelection:
+		session.state = NewSessionStateInGameSelection(session.playerNumber)
+	case SessionStateTypeInGame:
+		session.state = NewSessionStateInGame(session.playerNumber, session.game)
 	}
+	return session
+}
 
-	session.state = state
+type SessionStateType int
+
+const (
+	SessionStateTypeInMenu SessionStateType = iota
+	SessionStateTypeWaitingRoom
+	SessionStateTypeGameSelection
+	SessionStateTypeInGame
+)
+
+func (sType SessionStateType) String() string {
+	switch sType {
+	case SessionStateTypeInMenu:
+		return "In Menu"
+	case SessionStateTypeWaitingRoom:
+		return "Waiting Room"
+	case SessionStateTypeGameSelection:
+		return "Game Selection"
+	case SessionStateTypeInGame:
+		return "In Game"
+	default:
+		return "Unknown"
+	}
 }
 
 type SessionState interface {
-	handleServerMessage(msg messages.ServerMessage) error
-	handlePlayerMessage(msg messages.ClientMessage) error
+	GetType() SessionStateType
+	GetDisplayString() string
+	HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd)
+	handleServerMessage(session Session, msg messages.ServerMessage) (Session, error)
 }
 
 type SessionStateInMenu struct {
-	session *Session
+	textArea textarea.Model
 }
 
-func (state SessionStateInMenu) handleServerMessage(msg messages.ServerMessage) error {
+func (SessionState SessionStateInMenu) GetType() SessionStateType {
+	return SessionStateTypeInMenu
+}
+
+func NewSessionStateInMenu() *SessionStateInMenu {
+	textArea := textarea.New()
+	textArea.Placeholder = "Enter room code."
+	textArea.Focus()
+	textArea.Prompt = " "
+	textArea.CharLimit = 5
+	textArea.SetWidth(30)
+	textArea.SetHeight(1)
+	textArea.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	textArea.ShowLineNumbers = false
+	textArea.KeyMap.InsertNewline.SetEnabled(false)
+	return &SessionStateInMenu{textArea: textArea}
+}
+
+func (state *SessionStateInMenu) HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
+	var (
+		tiCmd     tea.Cmd
+		serverCmd tea.Cmd
+	)
+	state.textArea, tiCmd = state.textArea.Update(msg)
+
+	switch msg.String() {
+	case "enter":
+		if state.textArea.Value() == "" {
+			return session, func() tea.Msg { return ErrMsg{errors.New("Please enter a code.")} }
+		}
+		session, err := session.StartWS(session.serverUrl)
+		if err != nil {
+			return session, func() tea.Msg { return ErrMsg{err} }
+		}
+		joinMsg := messages.ClientMessage{
+			Type:     messages.ClientJoinRoom,
+			RoomCode: state.textArea.Value(),
+		}
+		serverCmd = SendMsgToServer(joinMsg, session)
+		return session, tea.Batch(tiCmd, serverCmd)
+	default:
+		return session, tea.Batch(tiCmd, serverCmd)
+	}
+}
+
+func (state SessionStateInMenu) GetDisplayString() string {
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#7D56F4")).
+		Padding(0, 1).
+		MarginBottom(1)
+
+	instructionStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#626262")).
+		MarginBottom(2)
+
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#874BFD")).
+		Padding(1).
+		MarginTop(1)
+
+	title := titleStyle.Render("🎮 ASCII ARCADE")
+	instruction := instructionStyle.Render("Enter a room code to join or create a game room")
+	textBox := boxStyle.Render(state.textArea.View())
+
+	return lipgloss.JoinVertical(lipgloss.Left, title, instruction, textBox)
+}
+
+func (state *SessionStateInMenu) handleServerMessage(session Session, msg messages.ServerMessage) (Session, error) {
 	switch msg.Type {
 	case messages.ServerRoomJoined:
-		state.session.playerNumber = msg.PlayerNumber
-		state.session.setState(state.session.stateWaitingRoom)
+		session.playerNumber = msg.PlayerNumber
+		session = session.setState(SessionStateTypeWaitingRoom)
 	default:
-		return fmt.Errorf("unexpected server message type whle in menu: %v", msg.Type)
+		return session, fmt.Errorf("unexpected server message type whle in menu: %v", msg.Type)
 	}
-	return nil
-}
-
-func (state SessionStateInMenu) handlePlayerMessage(msg messages.ClientMessage) error {
-	switch msg.Type {
-	case messages.ClientJoinRoom:
-		err := state.session.StartWS(state.session.serverUrl)
-		if err != nil {
-			return err
-		}
-		err = state.session.WriteToServer(msg)
-		if err != nil {
-			return err
-		}
-	default:
-		return ValidationError{
-			errorMsg: fmt.Sprintf("unexpected player message type while in menu: %v", msg.Type),
-		}
-	}
-
-	return nil
+	return session, nil
 }
 
 type SessionStateWaitingRoom struct {
-	session *Session
 }
 
-func (state SessionStateWaitingRoom) handleServerMessage(msg messages.ServerMessage) error {
+func (SessionState SessionStateWaitingRoom) GetType() SessionStateType {
+	return SessionStateTypeWaitingRoom
+}
+
+func NewSessionStateWaitingRoom() *SessionStateWaitingRoom {
+	return &SessionStateWaitingRoom{}
+}
+
+func (state *SessionStateWaitingRoom) HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q":
+		return session, SendMsgToServer(messages.ClientMessage{
+			Type: messages.ClientQuitRoom,
+		}, session)
+	default:
+		return session, nil
+	}
+}
+
+func (state SessionStateWaitingRoom) GetDisplayString() string {
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#FF6B35")).
+		Padding(0, 1).
+		MarginBottom(1)
+
+	statusStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#626262")).
+		Italic(true).
+		MarginBottom(1)
+
+	instructionStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#9CA3AF")).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("#6B7280")).
+		Padding(1).
+		MarginTop(1)
+
+	title := titleStyle.Render("⏳ WAITING ROOM")
+	status := statusStyle.Render("Waiting for another player to join...")
+	instruction := instructionStyle.Render("Press 'q' to quit and return to main menu")
+
+	return lipgloss.JoinVertical(lipgloss.Left, title, status, instruction)
+}
+
+func (state *SessionStateWaitingRoom) handleServerMessage(session Session, msg messages.ServerMessage) (Session, error) {
 	switch msg.Type {
 	case messages.ServerGameFinished:
-		state.session.game = msg.Game.GetGame()
-		state.session.handleRoomClosure(msg)
+		session.game = msg.Game.GetGame()
+		session = session.handleRoomClosure(msg)
 	case messages.ServerEnteredGameSelection:
-		state.session.setState(state.session.stateInGameSelection)
+		session = session.setState(SessionStateTypeGameSelection)
 	default:
-		return fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.Type)
+		return session, fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.Type)
 	}
 
-	return nil
-}
-
-func (state SessionStateWaitingRoom) handlePlayerMessage(msg messages.ClientMessage) error {
-	switch msg.Type {
-	case messages.ClientQuitRoom:
-		err := state.session.WriteToServer(msg)
-		if err != nil {
-			return err
-		}
-		state.session.setState(state.session.stateInMenu)
-	default:
-		return ValidationError{
-			errorMsg: fmt.Sprintf("unexpected player message type while in waiting room: %v", msg.Type),
-		}
-	}
-
-	return nil
+	return session, nil
 }
 
 type SessionStateInGameSelection struct {
-	session *Session
+	cursor    int
+	playerNum int
 }
 
-func (state SessionStateInGameSelection) handleServerMessage(msg messages.ServerMessage) error {
+func (SessionState SessionStateInGameSelection) GetType() SessionStateType {
+	return SessionStateTypeGameSelection
+}
+func NewSessionStateInGameSelection(playerNum int) *SessionStateInGameSelection {
+	return &SessionStateInGameSelection{
+		cursor:    0,
+		playerNum: playerNum,
+	}
+}
+
+func (state *SessionStateInGameSelection) HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
+	if session.playerNumber != 1 {
+		switch msg.String() {
+		case "q":
+			return session, SendMsgToServer(messages.ClientMessage{
+				Type: messages.ClientQuitRoom,
+			}, session)
+		default:
+			return session, nil
+		}
+	}
+
+	switch msg.String() {
+	case "q":
+		return session, SendMsgToServer(messages.ClientMessage{
+			Type: messages.ClientQuitRoom,
+		}, session)
+	case "up", "k", "w":
+		if state.cursor > 0 {
+			state.cursor--
+		}
+	case "down", "j", "s":
+		if state.cursor < len(game.GetGameTypes())-1 {
+			state.cursor++
+		}
+	case "enter", " ":
+		playerMsg := messages.ClientMessage{
+			Type:     messages.ClientSelectGameType,
+			GameType: game.GetGameTypes()[state.cursor],
+		}
+		return session, SendMsgToServer(playerMsg, session)
+	default:
+		return session, nil
+	}
+	return session, nil
+}
+
+func (state SessionStateInGameSelection) GetDisplayString() string {
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#32D74B")).
+		Padding(0, 1).
+		MarginBottom(1)
+
+	if state.playerNum != 1 {
+		waitingStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FF9500")).
+			Italic(true).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#FF9500")).
+			Padding(1).
+			MarginTop(1)
+
+		title := titleStyle.Render("🎯 GAME SELECTION")
+		waiting := waitingStyle.Render("Waiting for Player 1 to select a game...")
+
+		return lipgloss.JoinVertical(lipgloss.Left, title, waiting)
+	}
+
+	instructionStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#626262")).
+		MarginBottom(1)
+
+	selectedStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#32D74B")).
+		Padding(0, 1)
+
+	unselectedStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#9CA3AF")).
+		Padding(0, 1)
+
+	controlsStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#6B7280")).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("#374151")).
+		Padding(1).
+		MarginTop(1)
+
+	title := titleStyle.Render("🎯 GAME SELECTION")
+	instruction := instructionStyle.Render("Choose a game to play:")
+
+	var gameOptions []string
+	for i, gameType := range game.GetGameTypes() {
+		if i == state.cursor {
+			gameOptions = append(gameOptions, selectedStyle.Render("▶ "+gameType.String()))
+		} else {
+			gameOptions = append(gameOptions, unselectedStyle.Render("  "+gameType.String()))
+		}
+	}
+
+	games := lipgloss.JoinVertical(lipgloss.Left, gameOptions...)
+	controls := controlsStyle.Render("↑/↓ Navigate • Enter/Space Select • q Quit")
+
+	return lipgloss.JoinVertical(lipgloss.Left, title, instruction, games, controls)
+}
+
+func (state *SessionStateInGameSelection) handleServerMessage(session Session, msg messages.ServerMessage) (Session, error) {
 	switch msg.Type {
 	case messages.ServerGameStarted:
-		state.session.game = msg.Game.GetGame()
-		state.session.gameType = state.session.game.GetGameType()
-		state.session.playerTurn = msg.PlayerTurn
-		state.session.setState(state.session.stateInGame)
-		state.session.displayBoardToUser()
+		session.game = msg.Game.GetGame()
+		session.gameType = session.game.GetGameType()
+		session.playerTurn = msg.PlayerTurn
+		session = session.setState(SessionStateTypeInGame)
 	case messages.ServerGameFinished:
-		state.session.game = msg.Game.GetGame()
-		state.session.handleRoomClosure(msg)
-	}
-	return nil
-}
-
-func (state SessionStateInGameSelection) handlePlayerMessage(msg messages.ClientMessage) error {
-	switch msg.Type {
-	case messages.ClientQuitRoom:
-		err := state.session.WriteToServer(msg)
-		if err != nil {
-			return err
-		}
-		state.session.setState(state.session.stateInMenu)
-	case messages.ClientSelectGameType:
-		if state.session.playerNumber != 1 {
-			return ValidationError{
-				errorMsg: "only player 1 can select a game",
-			}
-		}
-		err := state.session.WriteToServer(msg)
-		if err != nil {
-			return err
-		}
+		session.game = msg.Game.GetGame()
+		session = session.handleRoomClosure(msg)
 	default:
-		return ValidationError{
-			errorMsg: fmt.Sprintf("unexpected player message type while in game: %v", msg.Type),
-		}
+		return session, fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.Type)
 	}
-
-	return nil
+	return session, nil
 }
 
 type SessionStateInGame struct {
-	session *Session
+	playerNum int
+	cursor    vector.Vector
+	game      game.Game
 }
 
-func (state SessionStateInGame) handleServerMessage(msg messages.ServerMessage) error {
+func (SessionState *SessionStateInGame) GetType() SessionStateType {
+	return SessionStateTypeInGame
+}
+
+func NewSessionStateInGame(playerNum int, game game.Game) *SessionStateInGame {
+	return &SessionStateInGame{
+		playerNum: playerNum,
+		game:      game,
+	}
+}
+
+func (state *SessionStateInGame) HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k", "w":
+		if state.cursor.Y > 0 {
+			state.cursor.Y--
+		}
+	case "down", "j", "s":
+		//TODO add ability to get board size from game
+		if state.cursor.Y < 2 {
+			state.cursor.Y++
+		}
+	case "left", "h", "a":
+		if state.cursor.X > 0 {
+			state.cursor.X--
+		}
+	case "right", "l", "d":
+		if state.cursor.X < 2 {
+			state.cursor.X++
+		}
+	case "enter", " ":
+		turnMsg := messages.ClientMessage{
+			Type: messages.ClientSendTurn,
+			TurnAction: messages.NewGameTurnWrapper(game.TicTacToeTurn{
+				Coords: state.cursor,
+			}),
+		}
+		return session, SendMsgToServer(turnMsg, session)
+	}
+	return session, nil
+}
+
+func (state *SessionStateInGame) GetDisplayString() string {
+	infoStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#626262")).
+		Background(lipgloss.Color("#1C1C1E")).
+		Padding(0, 1).
+		MarginBottom(1)
+
+	controlsStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#6B7280")).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("#374151")).
+		Padding(1)
+
+	board := state.game.DisplayBoard(state.cursor, state.playerNum)
+	info := infoStyle.Render(fmt.Sprintf("Cursor: (%d, %d) | Player: %d", state.cursor.X, state.cursor.Y, state.playerNum))
+	controls := controlsStyle.Render("WASD/Arrow Keys Move • Enter/Space Select • q Quit")
+
+	return lipgloss.JoinVertical(lipgloss.Left, board, info, controls)
+}
+
+func (state *SessionStateInGame) handleServerMessage(session Session, msg messages.ServerMessage) (Session, error) {
 	switch msg.Type {
+	case messages.ServerError:
+		return session, errors.New(msg.ErrorMessage)
 	case messages.ServerTurnResult:
-		moveFailed := msg.PlayerTurn == state.session.playerTurn
-		if moveFailed {
-			state.session.sessionToOutput <- AnsiRed + "Move invalid - " + msg.Message + AnsiReset
-			return nil
-		}
-
-		state.session.game = msg.Game.GetGame()
-		state.session.playerTurn = msg.PlayerTurn
-		if msg.Message != "" {
-			state.session.sessionToOutput <- AnsiBlue + msg.Message + AnsiReset
-		}
-		state.session.displayBoardToUser()
+		session.game = msg.Game.GetGame()
+		state.game = session.game
+		session.playerTurn = msg.PlayerTurn
 	case messages.ServerGameFinished:
-		state.session.game = msg.Game.GetGame()
-		state.session.handleRoomClosure(msg)
+		session.game = msg.Game.GetGame()
+		session = session.handleRoomClosure(msg)
 	default:
-		return fmt.Errorf("unexpected server message type whle in game: %v", msg.Type)
+		return session, fmt.Errorf("unexpected server message type whle in game: %v", msg.Type)
 	}
 
-	return nil
-}
-
-func (state SessionStateInGame) handlePlayerMessage(msg messages.ClientMessage) error {
-
-	switch msg.Type {
-	case messages.ClientSendTurn:
-		if state.session.playerNumber != state.session.playerTurn {
-			return ValidationError{
-				errorMsg: "can not send a move on another players turn",
-			}
-		}
-		err := state.session.WriteToServer(msg)
-		if err != nil {
-			return err
-		}
-	case messages.ClientQuitRoom:
-		err := state.session.WriteToServer(msg)
-		if err != nil {
-			return err
-		}
-		state.session.setState(state.session.stateInMenu)
-
-	default:
-		return ValidationError{
-			errorMsg: fmt.Sprintf("unexpected player message type while in game: %v", msg.Type),
-		}
-	}
-
-	return nil
+	return session, nil
 }

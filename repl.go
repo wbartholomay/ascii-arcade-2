@@ -1,105 +1,105 @@
 package main
 
-import (
-	"bufio"
-	"fmt"
-	"os"
-	"strings"
-)
+// import (
+// 	"bufio"
+// 	"fmt"
+// 	"os"
+// 	"strings"
+// )
 
-func cleanInput(text string) []string {
-	text = strings.ToLower(text)
-	substrings := strings.Fields(text)
-	return substrings
-}
+// func cleanInput(text string) []string {
+// 	text = strings.ToLower(text)
+// 	substrings := strings.Fields(text)
+// 	return substrings
+// }
 
-func startRepl(session *Session) error {
-	userInput := make(chan []string)
+// func startRepl(session *Session) error {
+// 	userInput := make(chan []string)
 
-	// Print ASCII ARCADE banner
-	fmt.Print(`
- █████╗ ███████╗ ██████╗██╗██╗     █████╗ ██████╗  ██████╗ █████╗ ██████╗ ███████╗
-██╔══██╗██╔════╝██╔════╝██║██║    ██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝
-███████║███████╗██║     ██║██║    ███████║██████╔╝██║     ███████║██║  ██║█████╗  
-██╔══██║╚════██║██║     ██║██║    ██╔══██║██╔══██╗██║     ██╔══██║██║  ██║██╔══╝  
-██║  ██║███████║╚██████╗██║██║    ██║  ██║██║  ██║╚██████╗██║  ██║██████╔╝███████╗
-╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚═╝    ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝ ╚══════╝
+// 	// Print ASCII ARCADE banner
+// 	fmt.Print(`
+//  █████╗ ███████╗ ██████╗██╗██╗     █████╗ ██████╗  ██████╗ █████╗ ██████╗ ███████╗
+// ██╔══██╗██╔════╝██╔════╝██║██║    ██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝
+// ███████║███████╗██║     ██║██║    ███████║██████╔╝██║     ███████║██║  ██║█████╗  
+// ██╔══██║╚════██║██║     ██║██║    ██╔══██║██╔══██╗██║     ██╔══██║██║  ██║██╔══╝  
+// ██║  ██║███████║╚██████╗██║██║    ██║  ██║██║  ██║╚██████╗██║  ██║██████╔╝███████╗
+// ╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚═╝    ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝ ╚══════╝
 
-`)
-	fmt.Println("Welcome to ASCII arcade! Enter \033[33mjoin <room-code>\033[0m to create/join a room, or enter \033[33mhelp\033[0m to see a list of commands.")
+// `)
+// 	fmt.Println("Welcome to ASCII arcade! Enter \033[33mjoin <room-code>\033[0m to create/join a room, or enter \033[33mhelp\033[0m to see a list of commands.")
 
-	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
-		for {
-			scanner.Scan()
-			input := cleanInput(scanner.Text())
-			userInput <- input
-		}
-	}()
+// 	go func() {
+// 		scanner := bufio.NewScanner(os.Stdin)
+// 		for {
+// 			scanner.Scan()
+// 			input := cleanInput(scanner.Text())
+// 			userInput <- input
+// 		}
+// 	}()
 
-	for {
-		curState := ""
-		switch session.state.(type) {
-		case SessionStateInMenu:
-			curState = AnsiLightBlue + "Main Menu" + AnsiReset
-		case SessionStateWaitingRoom:
-			curState = AnsiLightRed + "Waiting Room" + AnsiReset
-		case SessionStateInGameSelection:
-			curState = AnsiLightYellow + "Game Selection" + AnsiReset
-		case SessionStateInGame:
-			curState = AnsiLightGreen + "In Game" + AnsiReset
-		}
-		fmt.Printf("%v > ", curState)
-		select {
-		case input := <-userInput:
-			err := processUserInput(input, session)
-			if err != nil {
-				return err
-			}
-		case output := <-session.sessionToOutput:
-			fmt.Println(output)
-		}
-	}
-}
+// 	for {
+// 		curState := ""
+// 		switch session.state.(type) {
+// 		case SessionStateInMenu:
+// 			curState = AnsiLightBlue + "Main Menu" + AnsiReset
+// 		case SessionStateWaitingRoom:
+// 			curState = AnsiLightRed + "Waiting Room" + AnsiReset
+// 		case SessionStateInGameSelection:
+// 			curState = AnsiLightYellow + "Game Selection" + AnsiReset
+// 		case SessionStateInGame:
+// 			curState = AnsiLightGreen + "In Game" + AnsiReset
+// 		}
+// 		fmt.Printf("%v > ", curState)
+// 		select {
+// 		case input := <-userInput:
+// 			err := processUserInput(input, session)
+// 			if err != nil {
+// 				return err
+// 			}
+// 		case output := <-session.sessionToOutput:
+// 			fmt.Println(output)
+// 		}
+// 	}
+// }
 
-func processUserInput(input []string, session *Session) error {
-	if len(input) == 0 {
-		return nil
-	}
-	commandName := input[0]
-	commandArgs := input[1:]
-	cmd, ok := GetCommands()[commandName]
-	if !ok {
-		fmt.Println("Invalid command, enter 'help' to see a list of commands.")
-		return nil
-	}
+// func processUserInput(input []string, session *Session) error {
+// 	if len(input) == 0 {
+// 		return nil
+// 	}
+// 	commandName := input[0]
+// 	commandArgs := input[1:]
+// 	cmd, ok := GetCommands()[commandName]
+// 	if !ok {
+// 		fmt.Println("Invalid command, enter 'help' to see a list of commands.")
+// 		return nil
+// 	}
 
-	_, isBasicCommand := cmd.(CommandBasic)
-	if isBasicCommand {
-		cmd.ExecuteCallback(commandArgs)
-		return nil
-	}
+// 	_, isBasicCommand := cmd.(CommandBasic)
+// 	if isBasicCommand {
+// 		cmd.ExecuteCallback(commandArgs)
+// 		return nil
+// 	}
 
-	gameCommand, isGameCommand := cmd.(GameCommand)
-	if !isGameCommand {
-		return fmt.Errorf("server error: entered a command that was not a basic or game command")
-	}
+// 	gameCommand, isGameCommand := cmd.(GameCommand)
+// 	if !isGameCommand {
+// 		return fmt.Errorf("server error: entered a command that was not a basic or game command")
+// 	}
 
-	msg, err := gameCommand.CreatePlayerMessage(session.gameType, commandArgs)
-	if err != nil {
-		fmt.Printf("error creating player message from command: %v\n", err)
-		return nil
-	}
+// 	msg, err := gameCommand.CreatePlayerMessage(session.gameType, commandArgs)
+// 	if err != nil {
+// 		fmt.Printf("error creating player message from command: %v\n", err)
+// 		return nil
+// 	}
 
-	err = session.HandlePlayerMessage(msg)
-	if err != nil {
-		switch err := err.(type) {
-		case ValidationError:
-			fmt.Println(err)
-			return nil
-		default:
-			return err
-		}
-	}
-	return nil
-}
+// 	err = session.HandlePlayerMessage(msg)
+// 	if err != nil {
+// 		switch err := err.(type) {
+// 		case ValidationError:
+// 			fmt.Println(err)
+// 			return nil
+// 		default:
+// 			return err
+// 		}
+// 	}
+// 	return nil
+// }
