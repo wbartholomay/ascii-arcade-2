@@ -572,7 +572,7 @@ func (state *SessionStateInGame) GetDisplayString() string {
 	info := infoStyle.Render(fmt.Sprintf("Cursor: (%d, %d) | Player: %d", state.cursor.X, state.cursor.Y, state.playerNum))
 	controls := controlsStyle.Render("WASD/Arrow Keys Move • Enter/Space Select • q Quit")
 
-	return lipgloss.JoinVertical(lipgloss.Left, board, info, controls)
+	return lipgloss.JoinVertical(lipgloss.Left, "\n", board, info, controls)
 }
 
 func (state *SessionStateInGame) handleServerMessage(session Session, msg messages.ServerMessage) (Session, error) {
