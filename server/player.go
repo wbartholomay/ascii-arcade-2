@@ -269,7 +269,7 @@ func (state PlayerStateInRoom) handleRoomMessage(msg messages.ServerMessage) err
 	case messages.ServerGameFinished:
 		state.player.WriteToClient(msg)
 		return fmt.Errorf("game ended, closing client. game result: %v", msg.GameResult)
-	case messages.ServerTurnResult:
+	case messages.ServerTurnResult, messages.ServerError:
 		err := state.player.WriteToClient(msg)
 		if err != nil {
 			return err

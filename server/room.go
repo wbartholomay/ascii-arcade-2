@@ -86,27 +86,21 @@ func (room *Room) Run() {
 
 // onQuit - Sends message to players who did not quit, informing them of game completion.
 func (room *Room) endGameOnQuit(quittingPlayerNum int) {
-	roomNotRunning := room.state == room.waitingForPlayerOne || room.state == room.waitingForPlayerTwo
-	if roomNotRunning {
-		return
+	message := messages.ServerMessage{
+		Type:       messages.ServerGameFinished,
+		Game:       messages.NewGameWrapper(room.game),
+		GameResult: messages.GameResultPlayerWin,
+		Message:    "Player 1 quit.",
 	}
 
-	if quittingPlayerNum == 1 {
-		p2Message := messages.ServerMessage{
-			Type:       messages.ServerGameFinished,
-			Game:       messages.NewGameWrapper(room.game),
-			GameResult: messages.GameResultPlayerWin,
-			Message:    "Player 1 quit.",
-		}
-		room.playerTwoChans.roomToPlayer <- p2Message
-	} else {
-		p1Message := messages.ServerMessage{
-			Type:       messages.ServerGameFinished,
-			Game:       messages.NewGameWrapper(room.game),
-			GameResult: messages.GameResultPlayerWin,
-			Message:    "Player 2 quit.",
-		}
-		room.playerOneChans.roomToPlayer <- p1Message
+	if quittingPlayerNum == 2 {
+		message.Message = "Player 2 quit."
+	}
+	if room.playerOneChans != (RoomChans{}) {
+		room.playerOneChans.roomToPlayer <- message
+	}
+	if room.playerTwoChans != (RoomChans{}) {
+		room.playerTwoChans.roomToPlayer <- message
 	}
 }
 
@@ -251,36 +245,45 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 		return fmt.Errorf("player %v quit", playerNumber)
 
 	case messages.ClientSendTurn:
-		//TODO could make this more readable
+		serverMsg := messages.ServerMessage{}
 		if playerNumber != state.room.playerTurn {
-			return fmt.Errorf("received a message from player when it is not their turn")
+			serverMsg.Type = messages.ServerError
+			serverMsg.ErrorMessage = "You can only move on your turn."
+			state.sendTurnResult(serverMsg, playerNumber)
+			return nil
 		}
 
 		isMoveValid, validationMsg := state.room.game.ValidateMove(msg.TurnAction.GetGameTurn(), playerNumber)
-		if isMoveValid {
-			validationMsg = state.room.game.ExecuteTurn(msg.TurnAction.GetGameTurn(), playerNumber)
-			state.room.advanceTurn()
+		if !isMoveValid {
+			serverMsg.Type = messages.ServerError
+			serverMsg.ErrorMessage = validationMsg
+			state.sendTurnResult(serverMsg, playerNumber)
+			return nil
 		}
+
+		state.room.game.ExecuteTurn(msg.TurnAction.GetGameTurn(), playerNumber)
+		state.room.advanceTurn()
 		if state.room.game.GetGameStatus() != game.GameStatusOngoing {
 			state.room.endGameOnCompletion()
 			return fmt.Errorf("game over, sent results to clients")
 		}
 
-		serverMsg := messages.ServerMessage{
-			Type:       messages.ServerTurnResult,
-			Game:       messages.NewGameWrapper(state.room.game),
-			PlayerTurn: state.room.playerTurn,
-			Message:    validationMsg,
-		}
-		if !isMoveValid && playerNumber == 1 {
-			state.room.playerOneChans.roomToPlayer <- serverMsg
-		} else if !isMoveValid && playerNumber == 2 {
-			state.room.playerTwoChans.roomToPlayer <- serverMsg
-		} else {
-			state.room.playerOneChans.roomToPlayer <- serverMsg
-			state.room.playerTwoChans.roomToPlayer <- serverMsg
-		}
+		serverMsg.Type = messages.ServerTurnResult
+		serverMsg.Game = messages.NewGameWrapper(state.room.game)
+		serverMsg.PlayerTurn = state.room.playerTurn
+		state.sendTurnResult(serverMsg, playerNumber)
 	}
 
 	return nil
+}
+
+func (state RoomStateRunning) sendTurnResult(serverMsg messages.ServerMessage, playerNumber int) {
+	if serverMsg.Type == messages.ServerError && playerNumber == 1 {
+		state.room.playerOneChans.roomToPlayer <- serverMsg
+	} else if serverMsg.Type == messages.ServerError && playerNumber == 2 {
+		state.room.playerTwoChans.roomToPlayer <- serverMsg
+	} else {
+		state.room.playerOneChans.roomToPlayer <- serverMsg
+		state.room.playerTwoChans.roomToPlayer <- serverMsg
+	}
 }

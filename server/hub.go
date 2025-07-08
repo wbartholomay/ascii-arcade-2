@@ -38,7 +38,6 @@ func (h *Hub) Run() {
 		case msg := <-h.roomRequests:
 			room, ok := rooms[msg.code]
 			if !ok {
-				// room = NewRoom(msg.code, closeReq)
 				log.Printf("Creating new room with code: %v", msg.code)
 				room = NewRoom(msg.code, closeReq)
 				go room.Run()

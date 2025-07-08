@@ -263,7 +263,7 @@ func (game *CheckersGame) checkSurroundingSquaresForCapture(square vector.Vector
 	return captureMoves
 }
 
-func (game *CheckersGame) DisplayBoard(playerNum int) string {
+func (game *CheckersGame) DisplayBoard(cursorPos vector.Vector, playerNum int) string {
 	isWhiteTurn := true
 	if playerNum == 2 {
 		isWhiteTurn = false

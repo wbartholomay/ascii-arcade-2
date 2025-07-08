@@ -1,11 +1,28 @@
 package game
 
+import "github.com/wbarthol/ascii-arcade-2/internal/vector"
+
 type GameType int
 
 const (
 	GameTypeTicTacToe GameType = iota
 	GameTypeCheckers
 )
+
+func GetGameTypes() []GameType {
+	return []GameType{GameTypeTicTacToe, GameTypeCheckers}
+}
+
+func (gt GameType) String() string {
+	switch gt {
+	case GameTypeTicTacToe:
+		return "TicTacToe"
+	case GameTypeCheckers:
+		return "Checkers"
+	default:
+		return "Unknown"
+	}
+}
 
 type GameStatus int
 
@@ -22,7 +39,7 @@ type Game interface {
 	GetGameInstructions() string
 	ValidateMove(GameTurn, int) (bool, string)
 	ExecuteTurn(GameTurn, int) string
-	DisplayBoard(int) string
+	DisplayBoard(vector.Vector, int) string
 }
 
 type GameTurn interface {
@@ -30,7 +47,7 @@ type GameTurn interface {
 }
 
 func NewGame(gameType GameType) Game {
-	switch gameType{
+	switch gameType {
 	case GameTypeTicTacToe:
 		return NewTicTacToeGame()
 	case GameTypeCheckers:

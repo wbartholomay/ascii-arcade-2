@@ -24,7 +24,7 @@ func NewWS(url string, session *Session) (*WSDriver, error) {
 		wsOpen:          true,
 		conn:            conn,
 		session:         session,
-		driverToSession: make(chan messages.ServerMessage),
+		driverToSession: session.driverToSession,
 	}
 
 	return &ws, nil
@@ -57,6 +57,7 @@ func (driver *WSDriver) CloseWS() {
 		return
 	}
 
+	
 	driver.wsOpen = false
 	driver.conn.Close()
 	close(driver.driverToSession)
