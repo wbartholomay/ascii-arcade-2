@@ -256,7 +256,7 @@ type PlayerStateInRoom struct {
 
 func (state PlayerStateInRoom) handleClientMessage(msg messages.ClientMessage) error {
 	switch msg.Type {
-	case messages.ClientSendTurn, messages.ClientQuitRoom:
+	case messages.ClientSendTurn, messages.ClientQuitRoom, messages.ClientConcede:
 		state.player.room.playerToRoom <- msg
 	default:
 		return fmt.Errorf("unsupported message type while in room: %v", msg.Type)

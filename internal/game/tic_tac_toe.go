@@ -38,6 +38,10 @@ func (game *TicTacToeGame) GetGameStatus() GameStatus {
 	return game.GameStatus
 }
 
+func (game *TicTacToeGame) OverrideGameStatus(status GameStatus) {
+	game.GameStatus = status
+}
+
 func (game *TicTacToeGame) GetGameInstructions() string {
 	return "when it is your turn, enter \033[33m move <row-num> <col-num>\033[0m."
 }
