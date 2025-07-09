@@ -194,7 +194,7 @@ func (session Session) setState(state SessionStateType) Session {
 	case SessionStateTypeGameSelection:
 		session.state = NewSessionStateInGameSelection(session.playerNumber)
 	case SessionStateTypeInGame:
-		session.state = NewSessionStateInGame(session.playerNumber, session.game)
+		session.state = NewSessionStateInGame(session.playerNumber, session.playerTurn, session.game)
 	}
 	return session
 }
@@ -510,6 +510,7 @@ func (state *SessionStateInGameSelection) handleServerMessage(session Session, m
 
 type SessionStateInGame struct {
 	playerNum int
+	isPlayerTurn bool
 	cursor    vector.Vector
 	game      game.Game
 }
@@ -518,15 +519,21 @@ func (SessionState *SessionStateInGame) GetType() SessionStateType {
 	return SessionStateTypeInGame
 }
 
-func NewSessionStateInGame(playerNum int, game game.Game) *SessionStateInGame {
+func NewSessionStateInGame(playerNum int, playerTurn int, game game.Game) *SessionStateInGame {
+
 	return &SessionStateInGame{
 		playerNum: playerNum,
 		game:      game,
+		isPlayerTurn: playerNum == playerTurn,
 	}
 }
 
 func (state *SessionStateInGame) HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "q":
+		return session, SendMsgToServer(messages.ClientMessage{
+			Type: messages.ClientQuitRoom,
+		}, session)
 	case "up", "k", "w":
 		if state.cursor.Y > 0 {
 			state.cursor.Y--
@@ -570,7 +577,13 @@ func (state *SessionStateInGame) GetDisplayString() string {
 		Padding(1)
 
 	board := state.game.DisplayBoard(state.cursor, state.playerNum)
-	info := infoStyle.Render(fmt.Sprintf("Cursor: (%d, %d) | Player: %d", state.cursor.X, state.cursor.Y, state.playerNum))
+	playerTurnMsg := ""
+	if state.isPlayerTurn {
+		playerTurnMsg = "Your turn!"
+	} else {
+		playerTurnMsg = "Waiting for opponents move..."
+	}
+	info := infoStyle.Render(fmt.Sprintf("Player: %d | %v", state.playerNum, playerTurnMsg))
 	controls := controlsStyle.Render("WASD/Arrow Keys Move • Enter/Space Select • q Quit")
 
 	return lipgloss.JoinVertical(lipgloss.Left, board, info, controls)
@@ -582,7 +595,9 @@ func (state *SessionStateInGame) handleServerMessage(session Session, msg messag
 		return session, errors.New(msg.ErrorMessage)
 	case messages.ServerTurnResult:
 		session.game = msg.Game.GetGame()
+		session.playerTurn = msg.PlayerTurn
 		state.game = session.game
+		state.isPlayerTurn = session.playerTurn == state.playerNum
 		session.playerTurn = msg.PlayerTurn
 	case messages.ServerGameFinished:
 		session.game = msg.Game.GetGame()
