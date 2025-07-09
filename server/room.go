@@ -146,6 +146,7 @@ func (room *Room) endGameOnCompletion() {
 
 	room.playerOneChans.roomToPlayer <- p1Message
 	room.playerTwoChans.roomToPlayer <- p2Message
+
 }
 
 type RoomState interface {
@@ -287,7 +288,7 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 		state.room.advanceTurn()
 		if state.room.game.GetGameStatus() != game.GameStatusOngoing {
 			state.room.endGameOnCompletion()
-			return nil
+			return fmt.Errorf("game completed, closing room")
 		}
 
 		serverMsg.Type = messages.ServerTurnResult

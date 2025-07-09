@@ -149,7 +149,10 @@ func (state PlayerStateNotInRoom) handleClientMessage(msg messages.ClientMessage
 				chans: chans,
 			}
 		}(chans)
-
+		case messages.ClientQuitRoom:
+			state.player.WriteToClient(messages.ServerMessage{
+				Type: messages.ServerRoomClosed,
+			})
 		log.Printf("Player waiting for room. Room code: %v", msg.RoomCode)
 	default:
 		return fmt.Errorf("unsupported message type while waiting for room: %v", msg.Type)
@@ -171,6 +174,7 @@ func (state PlayerStateNotInRoom) handleRoomMessage(msg messages.ServerMessage) 
 
 		state.player.setState(state.player.waitingRoom)
 	case messages.ServerRoomUnavailable:
+		msg.ErrorMessage = "room is full"
 		state.player.WriteToClient(msg)
 		return fmt.Errorf("player tried to join full room")
 	default:
@@ -252,9 +256,7 @@ type PlayerStateInRoom struct {
 
 func (state PlayerStateInRoom) handleClientMessage(msg messages.ClientMessage) error {
 	switch msg.Type {
-	case messages.ClientSendTurn:
-		state.player.room.playerToRoom <- msg
-	case messages.ClientQuitRoom:
+	case messages.ClientSendTurn, messages.ClientQuitRoom:
 		state.player.room.playerToRoom <- msg
 	default:
 		return fmt.Errorf("unsupported message type while in room: %v", msg.Type)
@@ -268,6 +270,7 @@ func (state PlayerStateInRoom) handleRoomMessage(msg messages.ServerMessage) err
 	switch msg.Type {
 	case messages.ServerGameFinished:
 		state.player.WriteToClient(msg)
+		state.player.setState(state.player.notInRoom)
 	case messages.ServerRoomClosed:
 		state.player.WriteToClient(msg)
 		return fmt.Errorf("client quit, closing room")

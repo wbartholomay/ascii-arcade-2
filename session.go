@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -37,6 +38,8 @@ func (msg ErrMsg) Error() string {
 
 type Session struct {
 	state SessionState
+
+	roomCode string
 
 	waitingForServerResponse bool
 	errMsg                   string
@@ -133,7 +136,7 @@ func (session Session) View() string {
 	return s
 }
 
-func SendMsgToServer(msg messages.ClientMessage, session Session) tea.Cmd {
+func (session Session) SendMsgToServer(msg messages.ClientMessage) tea.Cmd {
 	return func() tea.Msg {
 		err := session.WriteToServer(msg)
 		//TODO figure out error handling
@@ -192,10 +195,11 @@ func (session Session) setState(state SessionStateType) Session {
 		session.driverToSession = make(chan messages.ServerMessage)
 		session.state = NewSessionStateInMenu()
 	case SessionStateTypeWaitingRoom:
-		if session.state.GetType() != SessionStateTypeInMenu {
+		acceptableStates := []SessionStateType{SessionStateTypeInMenu, SessionStateTypeEndGame}
+		if !slices.Contains(acceptableStates, session.state.GetType()) {
 			panic(fmt.Sprintf("Unexpected state when transitioning to waiting room: %v", session.state.GetType()))
 		}
-		session.state = NewSessionStateWaitingRoom()
+		session.state = NewSessionStateWaitingRoom(session.roomCode)
 	case SessionStateTypeGameSelection:
 		if session.state.GetType() != SessionStateTypeWaitingRoom {
 			panic(fmt.Sprintf("Unexpected state when transitioning to game selection: %v", session.state.GetType()))
@@ -210,7 +214,7 @@ func (session Session) setState(state SessionStateType) Session {
 		if session.state.GetType() != SessionStateTypeInGame {
 			panic(fmt.Sprintf("Unexpected state when transitioning to end game: %v", session.state.GetType()))
 		}
-		session.state = NewSessionStateEndGame(session.game, session.gameResult)
+		session.state = NewSessionStateEndGame(session.game, session.gameResult, session.playerNumber)
 	}
 	return session
 }
@@ -287,11 +291,12 @@ func (state *SessionStateInMenu) HandleUserInput(msg tea.KeyMsg, session Session
 		if err != nil {
 			return session, func() tea.Msg { return ErrMsg{err} }
 		}
+		session.roomCode = state.textArea.Value()
 		joinMsg := messages.ClientMessage{
 			Type:     messages.ClientJoinRoom,
-			RoomCode: state.textArea.Value(),
+			RoomCode: session.roomCode,
 		}
-		serverCmd = SendMsgToServer(joinMsg, session)
+		serverCmd = session.SendMsgToServer(joinMsg)
 		return session, tea.Batch(tiCmd, serverCmd)
 	default:
 		return session, tea.Batch(tiCmd, serverCmd)
@@ -335,22 +340,25 @@ func (state *SessionStateInMenu) handleServerMessage(session Session, msg messag
 }
 
 type SessionStateWaitingRoom struct {
+	roomCode string
 }
 
 func (SessionState SessionStateWaitingRoom) GetType() SessionStateType {
 	return SessionStateTypeWaitingRoom
 }
 
-func NewSessionStateWaitingRoom() *SessionStateWaitingRoom {
-	return &SessionStateWaitingRoom{}
+func NewSessionStateWaitingRoom(roomCode string) *SessionStateWaitingRoom {
+	return &SessionStateWaitingRoom{
+		roomCode: roomCode,
+	}
 }
 
 func (state *SessionStateWaitingRoom) HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
-		return session, SendMsgToServer(messages.ClientMessage{
+		return session, session.SendMsgToServer(messages.ClientMessage{
 			Type: messages.ClientQuitRoom,
-		}, session)
+		})
 	default:
 		return session, nil
 	}
@@ -376,7 +384,7 @@ func (state SessionStateWaitingRoom) GetDisplayString() string {
 		Padding(1).
 		MarginTop(1)
 
-	title := titleStyle.Render("⏳ WAITING ROOM")
+	title := titleStyle.Render("WAITING ROOM | ROOM CODE: " + state.roomCode)
 	status := statusStyle.Render("Waiting for another player to join...")
 	instruction := instructionStyle.Render("Press 'q' to quit and return to main menu")
 
@@ -415,9 +423,9 @@ func (state *SessionStateInGameSelection) HandleUserInput(msg tea.KeyMsg, sessio
 	if session.playerNumber != 1 {
 		switch msg.String() {
 		case "q":
-			return session, SendMsgToServer(messages.ClientMessage{
+			return session, session.SendMsgToServer(messages.ClientMessage{
 				Type: messages.ClientQuitRoom,
-			}, session)
+			})
 		default:
 			return session, nil
 		}
@@ -425,9 +433,9 @@ func (state *SessionStateInGameSelection) HandleUserInput(msg tea.KeyMsg, sessio
 
 	switch msg.String() {
 	case "q":
-		return session, SendMsgToServer(messages.ClientMessage{
+		return session, session.SendMsgToServer(messages.ClientMessage{
 			Type: messages.ClientQuitRoom,
-		}, session)
+		})
 	case "up", "k", "w":
 		if state.cursor > 0 {
 			state.cursor--
@@ -441,7 +449,7 @@ func (state *SessionStateInGameSelection) HandleUserInput(msg tea.KeyMsg, sessio
 			Type:     messages.ClientSelectGameType,
 			GameType: game.GetGameTypes()[state.cursor],
 		}
-		return session, SendMsgToServer(playerMsg, session)
+		return session, session.SendMsgToServer(playerMsg)
 	default:
 		return session, nil
 	}
@@ -548,9 +556,9 @@ func NewSessionStateInGame(playerNum int, playerTurn int, game game.Game) *Sessi
 func (state *SessionStateInGame) HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
-		return session, SendMsgToServer(messages.ClientMessage{
+		return session, session.SendMsgToServer(messages.ClientMessage{
 			Type: messages.ClientQuitRoom,
-		}, session)
+		})
 	case "up", "k", "w":
 		if state.cursor.Y > 0 {
 			state.cursor.Y--
@@ -575,7 +583,7 @@ func (state *SessionStateInGame) HandleUserInput(msg tea.KeyMsg, session Session
 				Coords: state.cursor,
 			}),
 		}
-		return session, SendMsgToServer(turnMsg, session)
+		return session, session.SendMsgToServer(turnMsg)
 	}
 	return session, nil
 }
@@ -633,12 +641,14 @@ func (state *SessionStateInGame) handleServerMessage(session Session, msg messag
 type SessionStateEndGame struct {
 	game       game.Game
 	gameResult messages.GameResult
+	playerNum  int
 }
 
-func NewSessionStateEndGame(game game.Game, gameResult messages.GameResult) *SessionStateEndGame {
+func NewSessionStateEndGame(game game.Game, gameResult messages.GameResult, playerNum int) *SessionStateEndGame {
 	return &SessionStateEndGame{
 		game:       game,
 		gameResult: gameResult,
+		playerNum:  playerNum,
 	}
 }
 
@@ -646,19 +656,75 @@ func (state SessionStateEndGame) GetType() SessionStateType {
 	return SessionStateTypeEndGame
 }
 func (state SessionStateEndGame) GetDisplayString() string {
-	//TODO
-	return "IN END GAME"
+	resultStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Padding(0, 1).
+		MarginBottom(1).
+		MarginTop(1)
+
+	promptStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#626262")).
+		Background(lipgloss.Color("#1C1C1E")).
+		Padding(0, 1).
+		MarginBottom(1)
+
+	controlsStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#6B7280")).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("#374151")).
+		Padding(1)
+
+	board := state.game.DisplayBoard(vector.NewVector(-1, -1), state.playerNum)
+
+	var resultStr string
+	switch state.gameResult {
+	case messages.GameResultPlayerWin:
+		resultStyle = resultStyle.Background(lipgloss.Color("#32D74B"))
+		resultStr = "You Won!"
+	case messages.GameResultPlayerLose:
+		resultStyle = resultStyle.Background(lipgloss.Color("#FF3B30"))
+		resultStr = "You Lost"
+	case messages.GameResultDraw:
+		resultStyle = resultStyle.Background(lipgloss.Color("#FF9500"))
+		resultStr = "It's a Draw!"
+	default:
+		resultStr = "Game Over"
+	}
+
+	result := resultStyle.Render(resultStr)
+	prompt := promptStyle.Render("Play again? (y/n)")
+	controls := controlsStyle.Render("y Play Again • n/q Quit to Menu")
+
+	return lipgloss.JoinVertical(lipgloss.Left, board, result, prompt, controls)
 }
 
 func (state *SessionStateEndGame) HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
-	//TODO
-	return session, nil
+	switch msg.String() {
+	case "y":
+		return session, session.SendMsgToServer(messages.ClientMessage{
+			Type:     messages.ClientJoinRoom,
+			RoomCode: session.roomCode,
+		})
+	case "n", "q":
+		return session, session.SendMsgToServer(messages.ClientMessage{
+			Type: messages.ClientQuitRoom,
+		})
+	default:
+		return session, nil
+	}
 }
 
 func (state *SessionStateEndGame) handleServerMessage(session Session, msg messages.ServerMessage) (Session, error) {
 	//TODO
 	switch msg.Type {
+	case messages.ServerRoomJoined:
+		session.playerNumber = msg.PlayerNumber
+		session = session.setState(SessionStateTypeWaitingRoom)
 	case messages.ServerRoomClosed:
+		session = session.handleRoomClosure(msg)
+	default:
+		return session, fmt.Errorf("unexpected server message type while in game end: %v", msg.Type)
 	}
 	return session, nil
 }

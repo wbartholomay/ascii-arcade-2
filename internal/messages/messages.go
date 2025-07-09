@@ -134,6 +134,7 @@ const (
 	ClientSelectGameType
 	ClientSendTurn
 	ClientQuitRoom
+	ClientPlayAgain
 )
 
 type ClientMessage struct {
