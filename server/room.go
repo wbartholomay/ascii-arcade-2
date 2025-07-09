@@ -86,22 +86,44 @@ func (room *Room) Run() {
 
 // onQuit - Sends message to players who did not quit, informing them of game completion.
 func (room *Room) endGameOnQuit(quittingPlayerNum int) {
-	message := messages.ServerMessage{
-		Type:       messages.ServerGameFinished,
+	p1Message := messages.ServerMessage{
+		Type:       messages.ServerRoomClosed,
 		Game:       messages.NewGameWrapper(room.game),
-		GameResult: messages.GameResultPlayerWin,
-		Message:    "Player 1 quit.",
+	}
+	p2Message := messages.ServerMessage{
+		Type:       messages.ServerRoomClosed,
+		Game:       messages.NewGameWrapper(room.game),
 	}
 
+	if quittingPlayerNum == 1 {
+		p1Message.GameResult = messages.GameResultPlayerLose
+		p1Message.QuittingPlayerNum = 1
+		p2Message.GameResult = messages.GameResultPlayerWin
+		p2Message.QuittingPlayerNum = 1
+	}
 	if quittingPlayerNum == 2 {
-		message.Message = "Player 2 quit."
+		p2Message.GameResult = messages.GameResultPlayerLose
+		p2Message.QuittingPlayerNum = 2
+		p1Message.GameResult = messages.GameResultPlayerWin
+		p1Message.QuittingPlayerNum = 2
 	}
-	if room.playerOneChans != (RoomChans{}) {
-		room.playerOneChans.roomToPlayer <- message
-	}
-	if room.playerTwoChans != (RoomChans{}) {
-		room.playerTwoChans.roomToPlayer <- message
-	}
+
+	//Non blocking sends to players - it is possible they are closed here.
+	//them being closed should not impact the rooms functionality
+    if room.playerOneChans != (RoomChans{}) {
+        select {
+        case room.playerOneChans.roomToPlayer <- p1Message:
+        default:
+            log.Printf("Could not send message to player 1, channel unavailable")
+        }
+    }
+    if room.playerTwoChans != (RoomChans{}) {
+        select {
+        case room.playerTwoChans.roomToPlayer <- p2Message:
+        default:
+            log.Printf("Could not send message to player 2, channel unavailable")
+        }
+    }
 }
 
 func (room *Room) endGameOnCompletion() {
@@ -124,6 +146,7 @@ func (room *Room) endGameOnCompletion() {
 
 	room.playerOneChans.roomToPlayer <- p1Message
 	room.playerTwoChans.roomToPlayer <- p2Message
+
 }
 
 type RoomState interface {
@@ -265,7 +288,7 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 		state.room.advanceTurn()
 		if state.room.game.GetGameStatus() != game.GameStatusOngoing {
 			state.room.endGameOnCompletion()
-			return fmt.Errorf("game over, sent results to clients")
+			return fmt.Errorf("game completed, closing room")
 		}
 
 		serverMsg.Type = messages.ServerTurnResult

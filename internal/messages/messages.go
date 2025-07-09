@@ -53,19 +53,44 @@ const (
 	ServerTurnResult
 	ServerRoomDisconnected
 	ServerGameFinished
+	ServerRoomClosed
 	ServerRoomUnavailable
 	ServerError
 )
 
+func (sType ServerMessageType) String() string {
+	switch sType {
+	case ServerRoomJoined:
+		return "Room Joined"
+	case ServerEnteredGameSelection:
+		return "Entered Game Selection"
+	case ServerGameStarted:
+		return "Game Started"
+	case ServerTurnResult:
+		return "Turn Result"
+	case ServerRoomDisconnected:
+		return "Room Disconnected"
+	case ServerGameFinished:
+		return "Game Finished"
+	case ServerRoomClosed:
+		return "Room Closed"
+	case ServerRoomUnavailable:
+		return "Room Unavailable"
+	case ServerError:
+		return "Error"
+	default:
+		return "Unknown"
+	}
+}
 
 type ServerMessage struct {
-	Type         ServerMessageType `json:"type"`
-	PlayerNumber int               `json:"player_number"`
-	PlayerTurn   int               `json:"player_turn"`
-	Game         GameWrapper       `json:"game"`
-	GameResult   GameResult        `json:"game_result"`
-	Message      string            `json:"message"`
-	ErrorMessage string            `json:"error_message"`
+	Type              ServerMessageType `json:"type"`
+	PlayerNumber      int               `json:"player_number"`
+	PlayerTurn        int               `json:"player_turn"`
+	Game              GameWrapper       `json:"game"`
+	GameResult        GameResult        `json:"game_result"`
+	QuittingPlayerNum int               `json:"quitting_player_num"`
+	ErrorMessage      string            `json:"error_message"`
 }
 
 type GameTurnWrapper struct {
@@ -109,6 +134,7 @@ const (
 	ClientSelectGameType
 	ClientSendTurn
 	ClientQuitRoom
+	ClientPlayAgain
 )
 
 type ClientMessage struct {
