@@ -87,12 +87,12 @@ func (room *Room) Run() {
 // onQuit - Sends message to players who did not quit, informing them of game completion.
 func (room *Room) endGameOnQuit(quittingPlayerNum int) {
 	p1Message := messages.ServerMessage{
-		Type:       messages.ServerRoomClosed,
-		Game:       messages.NewGameWrapper(room.game),
+		Type: messages.ServerRoomClosed,
+		Game: messages.NewGameWrapper(room.game),
 	}
 	p2Message := messages.ServerMessage{
-		Type:       messages.ServerRoomClosed,
-		Game:       messages.NewGameWrapper(room.game),
+		Type: messages.ServerRoomClosed,
+		Game: messages.NewGameWrapper(room.game),
 	}
 
 	if quittingPlayerNum == 1 {
@@ -110,20 +110,20 @@ func (room *Room) endGameOnQuit(quittingPlayerNum int) {
 
 	//Non blocking sends to players - it is possible they are closed here.
 	//them being closed should not impact the rooms functionality
-    if room.playerOneChans != (RoomChans{}) {
-        select {
-        case room.playerOneChans.roomToPlayer <- p1Message:
-        default:
-            log.Printf("Could not send message to player 1, channel unavailable")
-        }
-    }
-    if room.playerTwoChans != (RoomChans{}) {
-        select {
-        case room.playerTwoChans.roomToPlayer <- p2Message:
-        default:
-            log.Printf("Could not send message to player 2, channel unavailable")
-        }
-    }
+	if room.playerOneChans != (RoomChans{}) {
+		select {
+		case room.playerOneChans.roomToPlayer <- p1Message:
+		default:
+			log.Printf("Could not send message to player 1, channel unavailable")
+		}
+	}
+	if room.playerTwoChans != (RoomChans{}) {
+		select {
+		case room.playerTwoChans.roomToPlayer <- p2Message:
+		default:
+			log.Printf("Could not send message to player 2, channel unavailable")
+		}
+	}
 }
 
 func (room *Room) endGameOnCompletion() {
@@ -295,6 +295,14 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 		serverMsg.Game = messages.NewGameWrapper(state.room.game)
 		serverMsg.PlayerTurn = state.room.playerTurn
 		state.sendTurnResult(serverMsg, playerNumber)
+	case messages.ClientConcede:
+		if playerNumber == 1 {
+			state.room.game.OverrideGameStatus(game.GameStatusPlayer2Win)
+		} else {
+			state.room.game.OverrideGameStatus(game.GameStatusPlayer1Win)
+		}
+		state.room.endGameOnCompletion()
+		return fmt.Errorf("game completed, closing room")
 	}
 
 	return nil

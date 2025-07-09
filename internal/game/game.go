@@ -36,6 +36,7 @@ const (
 type Game interface {
 	GetGameType() GameType
 	GetGameStatus() GameStatus
+	OverrideGameStatus(GameStatus)
 	GetGameInstructions() string
 	ValidateMove(GameTurn, int) (bool, string)
 	ExecuteTurn(GameTurn, int) string

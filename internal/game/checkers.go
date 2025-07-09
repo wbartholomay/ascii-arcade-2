@@ -83,6 +83,10 @@ func (game *CheckersGame) GetGameStatus() GameStatus {
 	return game.GameStatus
 }
 
+func (game *CheckersGame) OverrideGameStatus(status GameStatus) {
+	game.GameStatus = status
+}
+
 func (game *CheckersGame) GetGameInstructions() string {
 	return "when it is your turn, enter \033[33m move <piece-num> <direction>\033[0m.\nPossible directions are \033[33m'l', 'r', 'bl', 'br'\033[0m. Note that only kings can move backwards."
 }
