@@ -44,8 +44,9 @@ type Session struct {
 	playerNumber int
 	playerTurn   int
 
-	gameType game.GameType
-	game     game.Game
+	gameType   game.GameType
+	game       game.Game
+	gameResult messages.GameResult
 
 	driverToSession chan messages.ServerMessage
 	wsDriver        *WSDriver
@@ -145,22 +146,24 @@ func SendMsgToServer(msg messages.ClientMessage, session Session) tea.Cmd {
 }
 
 func (session Session) handleRoomClosure(msg messages.ServerMessage) Session {
+	//TODO should move thsi outside of thsi function
 	if session.state.GetType() == SessionStateTypeInGame {
-		session = session.handleGameOver(msg.GameResult, msg.Message)
+		session = session.handleGameOver(msg.GameResult, msg.QuittingPlayerNum)
 		return session
 	}
 
 	// session.sessionToOutput <- "a player has quit, closing the room."
+	session.errMsg = "A player has quit, closing the room."
 	session = session.setState(SessionStateTypeInMenu)
 	return session
 }
 
-func (session Session) handleGameOver(gameResult messages.GameResult, detailsFromServer string) Session {
+func (session Session) handleGameOver(gameResult messages.GameResult, quittingPlayerNum int) Session {
 	// if detailsFromServer != "" {
 	// 	session.sessionToOutput <- detailsFromServer
 	// }
 
-	resultStr := detailsFromServer + "\n"
+	resultStr := ""
 	switch gameResult {
 	case messages.GameResultPlayerWin:
 		resultStr += AnsiGreen + "You won!" + AnsiReset
@@ -174,7 +177,6 @@ func (session Session) handleGameOver(gameResult messages.GameResult, detailsFro
 	session = session.setState(SessionStateTypeInMenu)
 	//TODO need other way to display variable information
 	session.errMsg = resultStr
-	//TODO
 	return session
 }
 
@@ -190,11 +192,25 @@ func (session Session) setState(state SessionStateType) Session {
 		session.driverToSession = make(chan messages.ServerMessage)
 		session.state = NewSessionStateInMenu()
 	case SessionStateTypeWaitingRoom:
+		if session.state.GetType() != SessionStateTypeInMenu {
+			panic(fmt.Sprintf("Unexpected state when transitioning to waiting room: %v", session.state.GetType()))
+		}
 		session.state = NewSessionStateWaitingRoom()
 	case SessionStateTypeGameSelection:
+		if session.state.GetType() != SessionStateTypeWaitingRoom {
+			panic(fmt.Sprintf("Unexpected state when transitioning to game selection: %v", session.state.GetType()))
+		}
 		session.state = NewSessionStateInGameSelection(session.playerNumber)
 	case SessionStateTypeInGame:
+		if session.state.GetType() != SessionStateTypeGameSelection {
+			panic(fmt.Sprintf("Unexpected state when transitioning to in game: %v", session.state.GetType()))
+		}
 		session.state = NewSessionStateInGame(session.playerNumber, session.playerTurn, session.game)
+	case SessionStateTypeEndGame:
+		if session.state.GetType() != SessionStateTypeInGame {
+			panic(fmt.Sprintf("Unexpected state when transitioning to end game: %v", session.state.GetType()))
+		}
+		session.state = NewSessionStateEndGame(session.game, session.gameResult)
 	}
 	return session
 }
@@ -206,6 +222,7 @@ const (
 	SessionStateTypeWaitingRoom
 	SessionStateTypeGameSelection
 	SessionStateTypeInGame
+	SessionStateTypeEndGame
 )
 
 func (sType SessionStateType) String() string {
@@ -218,6 +235,8 @@ func (sType SessionStateType) String() string {
 		return "Game Selection"
 	case SessionStateTypeInGame:
 		return "In Game"
+	case SessionStateTypeEndGame:
+		return "End Game"
 	default:
 		return "Unknown"
 	}
@@ -366,8 +385,7 @@ func (state SessionStateWaitingRoom) GetDisplayString() string {
 
 func (state *SessionStateWaitingRoom) handleServerMessage(session Session, msg messages.ServerMessage) (Session, error) {
 	switch msg.Type {
-	case messages.ServerGameFinished:
-		session.game = msg.Game.GetGame()
+	case messages.ServerRoomClosed:
 		session = session.handleRoomClosure(msg)
 	case messages.ServerEnteredGameSelection:
 		session = session.setState(SessionStateTypeGameSelection)
@@ -499,8 +517,7 @@ func (state *SessionStateInGameSelection) handleServerMessage(session Session, m
 		session.gameType = session.game.GetGameType()
 		session.playerTurn = msg.PlayerTurn
 		session = session.setState(SessionStateTypeInGame)
-	case messages.ServerGameFinished:
-		session.game = msg.Game.GetGame()
+	case messages.ServerRoomClosed:
 		session = session.handleRoomClosure(msg)
 	default:
 		return session, fmt.Errorf("unexpected server message type whle in waiting room: %v", msg.Type)
@@ -509,21 +526,21 @@ func (state *SessionStateInGameSelection) handleServerMessage(session Session, m
 }
 
 type SessionStateInGame struct {
-	playerNum int
+	playerNum    int
 	isPlayerTurn bool
-	cursor    vector.Vector
-	game      game.Game
+	cursor       vector.Vector
+	game         game.Game
 }
 
-func (SessionState *SessionStateInGame) GetType() SessionStateType {
+func (SessionState SessionStateInGame) GetType() SessionStateType {
 	return SessionStateTypeInGame
 }
 
 func NewSessionStateInGame(playerNum int, playerTurn int, game game.Game) *SessionStateInGame {
 
 	return &SessionStateInGame{
-		playerNum: playerNum,
-		game:      game,
+		playerNum:    playerNum,
+		game:         game,
 		isPlayerTurn: playerNum == playerTurn,
 	}
 }
@@ -563,7 +580,7 @@ func (state *SessionStateInGame) HandleUserInput(msg tea.KeyMsg, session Session
 	return session, nil
 }
 
-func (state *SessionStateInGame) GetDisplayString() string {
+func (state SessionStateInGame) GetDisplayString() string {
 	infoStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#626262")).
 		Background(lipgloss.Color("#1C1C1E")).
@@ -601,10 +618,47 @@ func (state *SessionStateInGame) handleServerMessage(session Session, msg messag
 		session.playerTurn = msg.PlayerTurn
 	case messages.ServerGameFinished:
 		session.game = msg.Game.GetGame()
-		session = session.handleRoomClosure(msg)
+		session.gameResult = msg.GameResult
+		session = session.setState(SessionStateTypeEndGame)
+	case messages.ServerRoomClosed:
+		session.handleRoomClosure(msg)
+		//todo
 	default:
 		return session, fmt.Errorf("unexpected server message type whle in game: %v", msg.Type)
 	}
 
+	return session, nil
+}
+
+type SessionStateEndGame struct {
+	game       game.Game
+	gameResult messages.GameResult
+}
+
+func NewSessionStateEndGame(game game.Game, gameResult messages.GameResult) *SessionStateEndGame {
+	return &SessionStateEndGame{
+		game:       game,
+		gameResult: gameResult,
+	}
+}
+
+func (state SessionStateEndGame) GetType() SessionStateType {
+	return SessionStateTypeEndGame
+}
+func (state SessionStateEndGame) GetDisplayString() string {
+	//TODO
+	return "IN END GAME"
+}
+
+func (state *SessionStateEndGame) HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
+	//TODO
+	return session, nil
+}
+
+func (state *SessionStateEndGame) handleServerMessage(session Session, msg messages.ServerMessage) (Session, error) {
+	//TODO
+	switch msg.Type {
+	case messages.ServerRoomClosed:
+	}
 	return session, nil
 }

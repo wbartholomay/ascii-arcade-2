@@ -197,9 +197,9 @@ func (state PlayerStateWaitingRoom) handleClientMessage(msg messages.ClientMessa
 
 func (state PlayerStateWaitingRoom) handleRoomMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
-	case messages.ServerGameFinished:
+	case messages.ServerRoomClosed:
 		state.player.WriteToClient(msg)
-		return fmt.Errorf("game ended, closing client. game result: %v", msg.GameResult)
+		return fmt.Errorf("client quit, closing room")
 	case messages.ServerEnteredGameSelection:
 		err := state.player.WriteToClient(msg)
 		if err != nil {
@@ -230,9 +230,9 @@ func (state PlayerStateInGameSelection) handleClientMessage(msg messages.ClientM
 
 func (state PlayerStateInGameSelection) handleRoomMessage(msg messages.ServerMessage) error {
 	switch msg.Type {
-	case messages.ServerGameFinished:
+	case messages.ServerRoomClosed:
 		state.player.WriteToClient(msg)
-		return fmt.Errorf("game ended, closing client. game result: %v", msg.GameResult)
+		return fmt.Errorf("client quit, closing room")
 	case messages.ServerGameStarted:
 		err := state.player.WriteToClient(msg)
 		if err != nil {
@@ -268,7 +268,9 @@ func (state PlayerStateInRoom) handleRoomMessage(msg messages.ServerMessage) err
 	switch msg.Type {
 	case messages.ServerGameFinished:
 		state.player.WriteToClient(msg)
-		return fmt.Errorf("game ended, closing client. game result: %v", msg.GameResult)
+	case messages.ServerRoomClosed:
+		state.player.WriteToClient(msg)
+		return fmt.Errorf("client quit, closing room")
 	case messages.ServerTurnResult, messages.ServerError:
 		err := state.player.WriteToClient(msg)
 		if err != nil {

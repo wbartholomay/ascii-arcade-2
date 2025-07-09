@@ -87,29 +87,25 @@ func (room *Room) Run() {
 // onQuit - Sends message to players who did not quit, informing them of game completion.
 func (room *Room) endGameOnQuit(quittingPlayerNum int) {
 	p1Message := messages.ServerMessage{
-		Type:       messages.ServerGameFinished,
+		Type:       messages.ServerRoomClosed,
 		Game:       messages.NewGameWrapper(room.game),
-		GameResult: messages.GameResultPlayerWin,
-		Message:    "Player 1 quit.",
 	}
 	p2Message := messages.ServerMessage{
-		Type:       messages.ServerGameFinished,
+		Type:       messages.ServerRoomClosed,
 		Game:       messages.NewGameWrapper(room.game),
-		GameResult: messages.GameResultPlayerWin,
-		Message:    "Player 1 quit.",
 	}
 
 	if quittingPlayerNum == 1 {
 		p1Message.GameResult = messages.GameResultPlayerLose
-		p1Message.Message = "You quit."
+		p1Message.QuittingPlayerNum = 1
 		p2Message.GameResult = messages.GameResultPlayerWin
-		p2Message.Message = "Player 1 quit."
+		p2Message.QuittingPlayerNum = 1
 	}
 	if quittingPlayerNum == 2 {
 		p2Message.GameResult = messages.GameResultPlayerLose
-		p2Message.Message = "You quit."
+		p2Message.QuittingPlayerNum = 2
 		p1Message.GameResult = messages.GameResultPlayerWin
-		p1Message.Message = "Player 1 quit."
+		p1Message.QuittingPlayerNum = 2
 	}
 
 	//Non blocking sends to players - it is possible they are closed here.
@@ -291,7 +287,7 @@ func (state RoomStateRunning) handlePlayerMessage(msg messages.ClientMessage, pl
 		state.room.advanceTurn()
 		if state.room.game.GetGameStatus() != game.GameStatusOngoing {
 			state.room.endGameOnCompletion()
-			return fmt.Errorf("game over, sent results to clients")
+			return nil
 		}
 
 		serverMsg.Type = messages.ServerTurnResult
