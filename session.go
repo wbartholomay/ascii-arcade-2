@@ -124,7 +124,8 @@ func (session Session) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (session Session) View() string {
-	s := session.state.GetDisplayString()
+	s := "\n"
+	s += session.state.GetDisplayString()
 	if session.errMsg != "" {
 		s += AnsiRed + session.errMsg + "\n" + AnsiReset
 	}

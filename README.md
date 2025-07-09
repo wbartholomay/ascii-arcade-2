@@ -1,53 +1,34 @@
-# ASCII Arcade
+# ASCII ARCADE
+Play your favorite board games with friends, right in your terminal!
 
-A multiplayer terminal-based arcade featuring classic board games, written in Go.
+![Tic Tac Toe Demo](./images/tictactoe-demo.gif)
 
+## Motivation
+
+ASCII Arcade was born from a love of classic board games and the elegance of terminal-based applications. In an age of complex GUIs and resource-heavy games, there's something refreshing about returning to the simplicity and accessibility of text-based interfaces. This project demonstrates that engaging, multiplayer gaming experiences don't require fancy graphics—just clever design, clean code, and a terminal.
+
+## 🚀 Quick Start
+
+### Clone the repository
+
+```bash
+git clone https://github.com/wbartholomay/ascii-arcade-2.git
 ```
- █████╗ ███████╗ ██████╗██╗██╗     █████╗ ██████╗  ██████╗ █████╗ ██████╗ ███████╗
-██╔══██╗██╔════╝██╔════╝██║██║    ██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝
-███████║███████╗██║     ██║██║    ███████║██████╔╝██║     ███████║██║  ██║█████╗  
-██╔══██║╚════██║██║     ██║██║    ██╔══██║██╔══██╗██║     ██╔══██║██║  ██║██╔══╝  
-██║  ██║███████║╚██████╗██║██║    ██║  ██║██║  ██║╚██████╗██║  ██║██████╔╝███████╗
-╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚═╝    ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝ ╚══════╝
+
+### Run the client
+
+```bash
+go run .
 ```
- 
-## Available Games
 
-### TicTacToe
-![Tic Tac Toe Board](./images/tic-tac-toe-board.png)
+## 📖 Usage
 
-### Checkers
-![Checkers Board](./images/checkers-board.png)
+### Create a room
 
-## Getting Started
+Enter a room code from the main menu, and share it with a friend!
+![Main Menu](./images/main-menu.gif)
 
-### Prerequisites
-- Go 1.24.4 or later
-- Terminal with Unicode support
+### Select a game
 
-### Installation
-
-1. **Download the latest release**:
-   ```bash
-   # Download from releases page or clone the repository
-   git clone https://github.com/wbarthol/ascii-arcade-2.git
-   cd ascii-arcade-2
-   ```
-
-2. **Build the client**:
-   ```bash
-   go build -o ascii-arcade .
-   ```
-
-3. **Run the game**:
-   ```bash
-   ./ascii-arcade
-   ```
-
-## Dataflow Design
-
-![ASCII Arcade Data Flow](./images/ascii-arcade-data-flow.png)
-
-## Planned Features
-- [ ] **Singleplayer** vs. AI
-- [ ] **Chess** implementation
+Once another player joins your room, select a game. Have fun!
+![Game Select](./images/game-select.gif)

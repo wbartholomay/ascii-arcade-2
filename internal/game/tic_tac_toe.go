@@ -144,15 +144,22 @@ func (game *TicTacToeGame) DisplayBoard(cursorPosition vector.Vector, _ int) str
 			case TicTacToeSquareEmpty:
 				symbol = " "
 			case TicTacToeSquareX:
-				symbol = xStyle.Render("X")
+				symbol = "X"
 			case TicTacToeSquareO:
-				symbol = oStyle.Render("O")
+				symbol = "O"
 			}
 
 			if cursorPosition.Equals(vector.NewVector(j, i)) {
+				// Apply cursor styling to the entire cell content including symbol
 				content := cursorStyle.Render(fmt.Sprintf("   %s   ", symbol))
 				result += content + "│"
 			} else {
+				// Apply individual symbol styling only when not highlighted
+				if game.Board[i][j] == TicTacToeSquareX {
+					symbol = xStyle.Render("X")
+				} else if game.Board[i][j] == TicTacToeSquareO {
+					symbol = oStyle.Render("O")
+				}
 				result += fmt.Sprintf("   %s   │", symbol)
 			}
 		}
