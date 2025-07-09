@@ -124,6 +124,23 @@ func (room *Room) endGameOnQuit(quittingPlayerNum int) {
 			log.Printf("Could not send message to player 2, channel unavailable")
 		}
 	}
+
+	//Non blocking sends to players - it is possible they are closed here.
+	//them being closed should not impact the rooms functionality
+    if room.playerOneChans != (RoomChans{}) {
+        select {
+        case room.playerOneChans.roomToPlayer <- p1Message:
+        default:
+            log.Printf("Could not send message to player 1, channel unavailable")
+        }
+    }
+    if room.playerTwoChans != (RoomChans{}) {
+        select {
+        case room.playerTwoChans.roomToPlayer <- p2Message:
+        default:
+            log.Printf("Could not send message to player 2, channel unavailable")
+        }
+    }
 }
 
 func (room *Room) endGameOnCompletion() {

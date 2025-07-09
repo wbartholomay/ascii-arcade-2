@@ -132,7 +132,6 @@ func (session Session) View() string {
 
 	var parts []string
 	parts = append(parts, content)
-
 	if session.errMsg != "" {
 		errorStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FF3B30")).
