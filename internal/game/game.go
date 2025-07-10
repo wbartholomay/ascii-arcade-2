@@ -10,7 +10,7 @@ const (
 )
 
 func GetGameTypes() []GameType {
-	return []GameType{GameTypeTicTacToe}
+	return []GameType{GameTypeTicTacToe, GameTypeCheckers}
 }
 
 func (gt GameType) String() string {

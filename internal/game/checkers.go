@@ -2,8 +2,10 @@ package game
 
 import (
 	"fmt"
-	"github.com/wbarthol/ascii-arcade-2/internal/vector"
 	"log"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/wbarthol/ascii-arcade-2/internal/vector"
 )
 
 const pieceWhite = "w"
@@ -16,10 +18,9 @@ type CheckersPiece struct {
 }
 
 type CheckersGame struct {
-	GameType        GameType              `json:"game_type"`
-	Board           [8][8]CheckersPiece   `json:"board"`
-	PiecePositions  map[int]vector.Vector `json:"piece_positions"`
-	GameStatus      GameStatus            `json:"game_status"`
+	GameType        GameType            `json:"game_type"`
+	Board           [8][8]CheckersPiece `json:"board"`
+	GameStatus      GameStatus          `json:"game_status"`
 	whitePieceCount int
 	blackPieceCount int
 }
@@ -68,7 +69,6 @@ func NewCheckersGame() *CheckersGame {
 	return &CheckersGame{
 		GameType:        GameTypeCheckers,
 		Board:           board,
-		PiecePositions:  pieces,
 		GameStatus:      GameStatusOngoing,
 		whitePieceCount: 12,
 		blackPieceCount: 12,
@@ -101,12 +101,23 @@ const (
 )
 
 type CheckersTurn struct {
-	PieceID   int               `json:"piece_id"`
-	Direction CheckersDirection `json:"direction"`
+	PieceCoords vector.Vector     `json:"piece_coords"`
+	Direction   CheckersDirection `json:"direction"`
 }
 
 func (turn CheckersTurn) GetGameType() GameType {
 	return GameTypeCheckers
+}
+
+func (game CheckersGame) SquareHasPlayerPiece(cursorPos vector.Vector, playerNum int) bool {
+	square := game.Board[cursorPos.Y][cursorPos.X]
+	playerColor := ""
+	if playerNum == 1 {
+		playerColor = pieceWhite
+	} else {
+		playerColor = pieceBlack
+	}
+	return square.Color == playerColor
 }
 
 // TODO switch this over to returning an error instead of bool + string
@@ -116,20 +127,11 @@ func (game *CheckersGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, 
 		panic("server error - sent a turn not of type checkers turn during checkers game")
 	}
 
-	var truePieceID int
-	if playerNum == 1 {
-		truePieceID = turn.PieceID + 100
-	} else {
-		truePieceID = turn.PieceID + 200
+	if !game.SquareHasPlayerPiece(turn.PieceCoords, playerNum) {
+		return false, fmt.Sprintf("player has no piece at square %v, %v", turn.PieceCoords.Y, turn.PieceCoords.X)
 	}
 
-	//check selected square
-	pieceCoords, ok := game.PiecePositions[truePieceID]
-	if !ok {
-		return false, fmt.Sprintf("no piece found with ID %v", turn.PieceID)
-	}
-
-	piece := game.Board[pieceCoords.Y][pieceCoords.X]
+	piece := game.Board[turn.PieceCoords.Y][turn.PieceCoords.X]
 	if !piece.IsKing {
 		if turn.Direction == CheckersDirectionBackLeft || turn.Direction == CheckersDirectionBackRight {
 			return false, "only kings can move backwards"
@@ -142,7 +144,7 @@ func (game *CheckersGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, 
 		trueDirection = convertDirectionFromBlackToWhite(trueDirection)
 	}
 
-	targetSquare := applyMove(pieceCoords, trueDirection)
+	targetSquare := applyMove(turn.PieceCoords, trueDirection)
 	if game.isSquareOutOfBounds(targetSquare) {
 		return false, "destination is out of bounds"
 	}
@@ -173,18 +175,7 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string {
 		panic("server error - sent a turn not of type checkers turn during checkers game")
 	}
 
-	var truePieceID int
-	if playerNum == 1 {
-		truePieceID = turn.PieceID + 100
-	} else {
-		truePieceID = turn.PieceID + 200
-	}
-
-	pieceCoords, ok := game.PiecePositions[truePieceID]
-	if !ok {
-		panic("validation was not called before execution, or it failed")
-	}
-	piece := game.Board[pieceCoords.Y][pieceCoords.X]
+	piece := game.Board[turn.PieceCoords.Y][turn.PieceCoords.X]
 
 	//get absolute direction based on input direction and piece color
 	trueDirection := turn.Direction
@@ -192,7 +183,7 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string {
 		trueDirection = convertDirectionFromBlackToWhite(trueDirection)
 	}
 
-	targetSquare := applyMove(pieceCoords, trueDirection)
+	targetSquare := applyMove(turn.PieceCoords, trueDirection)
 	targetPiece := game.Board[targetSquare.Y][targetSquare.X]
 	isOpponentPieceOnDest := targetPiece.Color != "" && targetPiece.Color != piece.Color
 
@@ -217,8 +208,7 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string {
 	}
 
 	game.Board[targetSquare.Y][targetSquare.X] = piece
-	game.Board[pieceCoords.Y][pieceCoords.X] = CheckersPiece{}
-	game.PiecePositions[truePieceID] = targetSquare
+	game.Board[turn.PieceCoords.Y][turn.PieceCoords.X] = CheckersPiece{}
 	game.GameStatus = game.checkGameStatus()
 
 	return msg
@@ -268,66 +258,149 @@ func (game *CheckersGame) checkSurroundingSquaresForCapture(square vector.Vector
 }
 
 func (game *CheckersGame) DisplayBoard(cursorPos vector.Vector, playerNum int) string {
-	isWhiteTurn := true
-	if playerNum == 2 {
-		isWhiteTurn = false
-	}
+	// Define styles
+	headerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#6366F1")).
+		Padding(0, 1).
+		MarginBottom(1)
 
-	result := "\n"
+	boardStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#6366F1")).
+		Padding(1)
+
+	darkSquareStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#8B4513")).
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Bold(true)
+
+	lightSquareStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#F5DEB3")).
+		Foreground(lipgloss.Color("#000000")).
+		Bold(true)
+
+	cursorStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#10B981")).
+		Foreground(lipgloss.Color("#000000")).
+		Bold(true)
+
+	isWhiteTurn := playerNum == 1
 	board := game.Board
-	rowNum := 0
-	increment := 1
-	checkIndex := func(i int) bool {
-		if isWhiteTurn {
-			return i < 8
-		} else {
-			return i >= 0
-		}
-	}
 
-	if !isWhiteTurn {
-		rowNum = 7
-		increment = -1
-		result += "       7       6       5       4       3       2       1       0    \n"
+	// Create header
+	header := headerStyle.Render("CHECKERS")
+
+	// Create column headers
+	var columnHeaders string
+	if isWhiteTurn {
+		columnHeaders = "        0       1       2       3       4       5       6       7   "
 	} else {
-		result += "       0       1       2       3       4       5       6       7    \n"
+		columnHeaders = "        7       6       5       4       3       2       1       0   "
 	}
 
-	for ; checkIndex(rowNum); rowNum += increment {
-		result += "   —————————————————————————————————————————————————————————————————\n"
-		squareStr := ""
-		if (rowNum%2 == 0 && isWhiteTurn) || (rowNum%2 != 0 && !isWhiteTurn) {
-			squareStr = "   |       |#######|       |#######|       |#######|       |#######|"
-		} else {
-			squareStr = "   |#######|       |#######|       |#######|       |#######|       |"
-		}
-		result += squareStr + "\n"
-		rowStr := fmt.Sprintf("%v  |", string(rune('a'+rowNum)))
+	// Build the board grid
+	var result string
+	result += "  ┌───────┬───────┬───────┬───────┬───────┬───────┬───────┬───────┐\n"
 
-		colNum := 0
-		if !isWhiteTurn {
-			colNum = 7
-		}
+	// Determine row order and column order based on player turn
+	rowOrder := make([]int, 8)
+	colOrder := make([]int, 8)
 
-		for ; checkIndex(colNum); colNum += increment {
-			piece := board[rowNum][colNum]
-			if rowNum%2 == colNum%2 {
-				rowStr += fmt.Sprintf("%v|", piece.renderPiece())
+	if isWhiteTurn {
+		for i := 0; i < 8; i++ {
+			rowOrder[i] = i
+			colOrder[i] = i
+		}
+	} else {
+		for i := 0; i < 8; i++ {
+			rowOrder[i] = 7 - i
+			colOrder[i] = 7 - i
+		}
+	}
+
+	for rowIdx, row := range rowOrder {
+		// Empty row above content for height
+		result += "  │"
+		for _, col := range colOrder {
+			isDarkSquare := (row+col)%2 == 1
+			isSelected := cursorPos.X == col && cursorPos.Y == row
+
+			if isSelected {
+				result += cursorStyle.Render("       ") + "│"
+			} else if isDarkSquare {
+				result += darkSquareStyle.Render("       ") + "│"
 			} else {
-				rowStr += "#######|"
+				result += lightSquareStyle.Render("       ") + "│"
 			}
 		}
-		result += rowStr + "\n"
-		result += squareStr + "\n"
-	}
-	result += "   —————————————————————————————————————————————————————————————————\n"
+		result += "\n"
 
-	return result
+		// Content row with row label
+		result += fmt.Sprintf("%s │", string(rune('a'+row)))
+		for _, col := range colOrder {
+			piece := board[row][col]
+			isDarkSquare := (row+col)%2 == 1
+			isSelected := cursorPos.X == col && cursorPos.Y == row
+
+			// Create consistent 7-character cell content
+			var cellContent string
+			if piece.Color == "" {
+				cellContent = "       " // 7 spaces for empty square
+			} else {
+				cellContent = piece.renderPieceSimple()
+			}
+
+			// Apply styling based on square type and selection
+			var styledContent string
+			if isSelected {
+				styledContent = cursorStyle.Render(cellContent)
+			} else if isDarkSquare {
+				styledContent = darkSquareStyle.Render(cellContent)
+			} else {
+				styledContent = lightSquareStyle.Render(cellContent)
+			}
+
+			result += styledContent + "│"
+		}
+		result += "\n"
+
+		// Empty row below content for height
+		result += "  │"
+		for _, col := range colOrder {
+			isDarkSquare := (row+col)%2 == 1
+			isSelected := cursorPos.X == col && cursorPos.Y == row
+
+			if isSelected {
+				result += cursorStyle.Render("       ") + "│"
+			} else if isDarkSquare {
+				result += darkSquareStyle.Render("       ") + "│"
+			} else {
+				result += lightSquareStyle.Render("       ") + "│"
+			}
+		}
+		result += "\n"
+
+		// Add horizontal separator (except after last row)
+		if rowIdx < 7 {
+			result += "  ├───────┼───────┼───────┼───────┼───────┼───────┼───────┼───────┤\n"
+		}
+	}
+
+	// Bottom border
+	result += "  └───────┴───────┴───────┴───────┴───────┴───────┴───────┴───────┘"
+
+	// Combine column headers with the board
+	gridWithHeaders := lipgloss.JoinVertical(lipgloss.Left, columnHeaders, result)
+	styledBoard := boardStyle.Render(gridWithHeaders)
+
+	return lipgloss.JoinVertical(lipgloss.Center, header, styledBoard)
 }
 
-func (piece *CheckersPiece) renderPiece() string {
+func (piece *CheckersPiece) renderPieceSimple() string {
 	if piece.Color == "" {
-		return "       "
+		return ""
 	}
 
 	pieceStr := ""
@@ -339,16 +412,20 @@ func (piece *CheckersPiece) renderPiece() string {
 
 	if piece.Color == pieceWhite {
 		pieceStr += "⚪"
-	} else if piece.Color == pieceBlack {
-		pieceStr += "🔵"
+	} else {
+		pieceStr += "⚫"
 	}
-	pieceStr += toSubscript(piece.getDisplayID())
 
-	if piece.getDisplayID() < 10 {
+	// Add subscript number for piece identification
+	displayID := piece.getDisplayID()
+	pieceStr += toSubscript(displayID)
+	if displayID < 10 {
+		pieceStr += "  "
+	} else {
 		pieceStr += " "
 	}
 
-	return pieceStr + " "
+	return pieceStr
 }
 
 func toSubscript(n int) string {
@@ -428,7 +505,6 @@ func (game *CheckersGame) capturePiece(targetSquare vector.Vector) {
 	} else {
 		game.blackPieceCount--
 	}
-	delete(game.PiecePositions, targetPiece.ID)
 	game.Board[targetSquare.Y][targetSquare.X] = CheckersPiece{}
 	log.Printf("Capture a piece at %v, %v", targetSquare.X, targetSquare.Y)
 }

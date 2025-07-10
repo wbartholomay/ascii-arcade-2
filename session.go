@@ -536,10 +536,12 @@ func (state *SessionStateInGameSelection) handleServerMessage(session Session, m
 }
 
 type SessionStateInGame struct {
-	playerNum    int
-	isPlayerTurn bool
-	cursor       vector.Vector
-	game         game.Game
+	playerNum        int
+	isPlayerTurn     bool
+	cursor           vector.Vector
+	game             game.Game
+	selectedSquare   vector.Vector
+	inMoveSelectMode bool
 }
 
 func (SessionState SessionStateInGame) GetType() SessionStateType {
@@ -549,13 +551,25 @@ func (SessionState SessionStateInGame) GetType() SessionStateType {
 func NewSessionStateInGame(playerNum int, playerTurn int, game game.Game) *SessionStateInGame {
 
 	return &SessionStateInGame{
-		playerNum:    playerNum,
-		game:         game,
-		isPlayerTurn: playerNum == playerTurn,
+		playerNum:      playerNum,
+		game:           game,
+		isPlayerTurn:   playerNum == playerTurn,
+		selectedSquare: vector.NewVector(-1, -1),
 	}
 }
 
 func (state *SessionStateInGame) HandleUserInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
+	switch state.game.GetGameType() {
+	case game.GameTypeTicTacToe:
+		return state.handleTicTacToeInput(msg, session)
+	case game.GameTypeCheckers:
+		return state.handleCheckersInput(msg, session)
+	default:
+		panic("game type not accounted for")
+	}
+}
+
+func (state *SessionStateInGame) handleTicTacToeInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "c", "q":
 		return session, session.SendMsgToServer(messages.ClientMessage{
@@ -566,7 +580,6 @@ func (state *SessionStateInGame) HandleUserInput(msg tea.KeyMsg, session Session
 			state.cursor.Y--
 		}
 	case "down", "j", "s":
-		//TODO add ability to get board size from game
 		if state.cursor.Y < 2 {
 			state.cursor.Y++
 		}
@@ -586,6 +599,81 @@ func (state *SessionStateInGame) HandleUserInput(msg tea.KeyMsg, session Session
 			}),
 		}
 		return session, session.SendMsgToServer(turnMsg)
+	}
+	return session, nil
+}
+
+func (state *SessionStateInGame) handleCheckersInput(msg tea.KeyMsg, session Session) (tea.Model, tea.Cmd) {
+	if !state.inMoveSelectMode {
+		switch msg.String() {
+		case "c", "q":
+			return session, session.SendMsgToServer(messages.ClientMessage{
+				Type: messages.ClientConcede,
+			})
+		case "up", "k", "w":
+			if state.playerNum == 1 && state.cursor.Y > 0 {
+				state.cursor.Y--
+			} else if state.playerNum == 2 && state.cursor.Y < 7 {
+				state.cursor.Y++
+			}
+		case "down", "j", "s":
+			if state.playerNum == 1 && state.cursor.Y < 7 {
+				state.cursor.Y++
+			} else if state.playerNum == 2 && state.cursor.Y > 0 {
+				state.cursor.Y--
+			}
+		case "left", "h", "a":
+			if state.playerNum == 1 && state.cursor.X > 0 {
+				state.cursor.X--
+			} else if state.playerNum == 2 && state.cursor.X < 7 {
+				state.cursor.X++
+			}
+		case "right", "l", "d":
+			if state.playerNum == 1 && state.cursor.X < 7 {
+				state.cursor.X++
+			} else if state.playerNum == 2 && state.cursor.X > 0 {
+				state.cursor.X--
+			}
+		case "enter", " ":
+			if !state.game.(*game.CheckersGame).SquareHasPlayerPiece(state.cursor, state.playerNum) {
+				return session, func() tea.Msg {
+					return ErrMsg{fmt.Errorf("you do not have a piece at %v, %v", state.cursor.Y, state.cursor.X)}
+				}
+			}
+			state.inMoveSelectMode = true
+			return session, nil
+		}
+	} else {
+		var moveDirection game.CheckersDirection
+		switch msg.String() {
+		case "c", "q":
+			return session, session.SendMsgToServer(messages.ClientMessage{
+				Type: messages.ClientConcede,
+			})
+		case "backspace", "escape":
+			state.inMoveSelectMode = false
+			return session, nil
+		case "e":
+			moveDirection = game.CheckersDirectionLeft
+		case "r":
+			moveDirection = game.CheckersDirectionRight
+		case "d":
+			moveDirection = game.CheckersDirectionBackLeft
+		case "f":
+			moveDirection = game.CheckersDirectionBackRight
+		default:
+			return session, func() tea.Msg {
+				return ErrMsg{fmt.Errorf("invalid input")}
+			}
+		}
+		state.inMoveSelectMode = false
+		return session, session.SendMsgToServer(messages.ClientMessage{
+			Type: messages.ClientSendTurn,
+			TurnAction: messages.NewGameTurnWrapper(game.CheckersTurn{
+				PieceCoords: state.cursor,
+				Direction:   moveDirection,
+			}),
+		})
 	}
 	return session, nil
 }
@@ -611,8 +699,14 @@ func (state SessionStateInGame) GetDisplayString() string {
 		playerTurnMsg = "Waiting for opponents move..."
 	}
 	info := infoStyle.Render(fmt.Sprintf("Player: %d | %v", state.playerNum, playerTurnMsg))
-	controls := controlsStyle.Render("WASD/Arrow Keys Move • Enter/Space Select • q/c Concede")
+	var controlStr string
+	if !state.inMoveSelectMode {
+		controlStr = "WASD/Arrow Keys Move • Enter/Space Select • q/c Concede"
+	} else {
+		controlStr = "e Move Left • r Move Right • d Move Back Left • f Move Back Right • Backspace Deselect Square • q/c Concede"
+	}
 
+	controls := controlsStyle.Render(controlStr)
 	return lipgloss.JoinVertical(lipgloss.Left, board, info, controls)
 }
 
@@ -718,7 +812,6 @@ func (state *SessionStateEndGame) HandleUserInput(msg tea.KeyMsg, session Sessio
 }
 
 func (state *SessionStateEndGame) handleServerMessage(session Session, msg messages.ServerMessage) (Session, error) {
-	//TODO
 	switch msg.Type {
 	case messages.ServerRoomJoined:
 		session.playerNumber = msg.PlayerNumber
