@@ -339,9 +339,7 @@ func (game *CheckersGame) DisplayBoard(cursorPos vector.Vector, playerNum int) s
 			if piece.Color == "" {
 				cellContent = "       " // 7 spaces for empty square
 			} else {
-				pieceStr := piece.renderPieceSimple()
-				// Simple centering - put piece in middle with spaces around
-				cellContent = fmt.Sprintf("  %s  ", pieceStr)
+				cellContent = piece.renderPieceSimple()
 			}
 
 			// Apply styling based on square type and selection
@@ -390,9 +388,9 @@ func (game *CheckersGame) DisplayBoard(cursorPos vector.Vector, playerNum int) s
 	return styledBoard
 }
 
-func (piece *CheckersPiece) renderPiece() string {
+func (piece *CheckersPiece) renderPieceSimple() string {
 	if piece.Color == "" {
-		return "       "
+		return ""
 	}
 
 	pieceStr := ""
@@ -404,37 +402,18 @@ func (piece *CheckersPiece) renderPiece() string {
 
 	if piece.Color == pieceWhite {
 		pieceStr += "⚪"
-	} else if piece.Color == pieceBlack {
-		pieceStr += "🔵"
-	}
-	pieceStr += toSubscript(piece.getDisplayID())
-
-	if piece.getDisplayID() < 10 {
-		pieceStr += " "
-	}
-
-	return pieceStr + " "
-}
-
-func (piece *CheckersPiece) renderPieceSimple() string {
-	if piece.Color == "" {
-		return ""
-	}
-
-	pieceStr := ""
-	if piece.IsKing {
-		pieceStr += "👑"
-	}
-
-	if piece.Color == pieceWhite {
-		pieceStr += "⚪"
-	} else if piece.Color == pieceBlack {
-		pieceStr += "🔵"
+	} else {
+		pieceStr += "⚫"
 	}
 
 	// Add subscript number for piece identification
 	displayID := piece.getDisplayID()
 	pieceStr += toSubscript(displayID)
+	if displayID < 10 {
+		pieceStr += "  "
+	} else {
+		pieceStr += " "
+	}
 
 	return pieceStr
 }
