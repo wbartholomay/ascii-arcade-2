@@ -18,28 +18,28 @@ func TestCheckersValidateMove(t *testing.T) {
 	}{
 		{
 			name:        "Valid white piece move",
-			turn:        CheckersTurn{PieceID: 1, Direction: CheckersDirectionLeft},
+			turn:        CheckersTurn{PieceCoords: vector.NewVector(1, 5), Direction: CheckersDirectionRight},
 			playerNum:   1,
 			expectedOK:  true,
 			expectedMsg: "",
 		},
 		{
 			name:        "Valid black piece move",
-			turn:        CheckersTurn{PieceID: 12, Direction: CheckersDirectionLeft},
+			turn:        CheckersTurn{PieceCoords: vector.NewVector(6, 2), Direction: CheckersDirectionLeft},
 			playerNum:   2,
 			expectedOK:  true,
 			expectedMsg: "",
 		},
 		{
-			name:        "Invalid piece ID",
-			turn:        CheckersTurn{PieceID: 99, Direction: CheckersDirectionLeft},
+			name:        "Invalid piece coords",
+			turn:        CheckersTurn{PieceCoords: vector.NewVector(4, 4), Direction: CheckersDirectionLeft},
 			playerNum:   1,
 			expectedOK:  false,
-			expectedMsg: "no piece found with ID 99",
+			expectedMsg: "player has no piece at square 4, 4",
 		},
 		{
 			name:        "Regular piece trying to move backwards",
-			turn:        CheckersTurn{PieceID: 1, Direction: CheckersDirectionBackLeft},
+			turn:        CheckersTurn{PieceCoords: vector.NewVector(1, 5), Direction: CheckersDirectionBackLeft},
 			playerNum:   1,
 			expectedOK:  false,
 			expectedMsg: "only kings can move backwards",
@@ -62,19 +62,15 @@ func TestCheckersValidateMove(t *testing.T) {
 func TestCheckersExecuteTurn(t *testing.T) {
 	game := NewCheckersGame()
 
-	turn := CheckersTurn{PieceID: 1, Direction: CheckersDirectionLeft}
+	turn := CheckersTurn{PieceCoords: vector.NewVector(1, 5), Direction: CheckersDirectionLeft}
 	playerNum := 1
 	truePieceID := 101
 
-	originalPos := game.PiecePositions[truePieceID]
+	originalPos := turn.PieceCoords
 
 	game.ExecuteTurn(turn, playerNum)
 
-	newPos := game.PiecePositions[truePieceID]
-	if newPos.X == originalPos.X && newPos.Y == originalPos.Y {
-		t.Error("Piece did not move after ExecuteTurn")
-	}
-
+	newPos := vector.NewVector(0, 4)
 	if game.Board[originalPos.Y][originalPos.X].Color != "" {
 		t.Error("Original position should be empty after move")
 	}
@@ -92,15 +88,12 @@ func TestValidateMoveCapture(t *testing.T) {
 
 	//clear board and piece positions
 	game.Board = [8][8]CheckersPiece{}
-	game.PiecePositions = make(map[int]vector.Vector)
 
 	game.Board[4][4] = CheckersPiece{ID: whitePieceID, Color: pieceWhite, IsKing: false}
 	game.Board[3][3] = CheckersPiece{ID: blackPieceID, Color: pieceBlack, IsKing: false}
-	game.PiecePositions[whitePieceID] = vector.Vector{X: 4, Y: 4}
-	game.PiecePositions[blackPieceID] = vector.Vector{X: 3, Y: 3}
-	
+
 	// Test valid capture move
-	turn := CheckersTurn{PieceID: 1, Direction: CheckersDirectionLeft}
+	turn := CheckersTurn{PieceCoords: vector.NewVector(4, 4), Direction: CheckersDirectionLeft}
 	ok, msg := game.ValidateMove(turn, 1)
 	if !ok {
 		t.Errorf("Valid capture move should be allowed, got error: %s", msg)
@@ -115,17 +108,14 @@ func TestExecuteTurnWithCapture(t *testing.T) {
 
 	//clear board and piece positions
 	game.Board = [8][8]CheckersPiece{}
-	game.PiecePositions = make(map[int]vector.Vector)
 
 	game.Board[4][4] = CheckersPiece{ID: whitePieceID, Color: pieceWhite, IsKing: false}
 	game.Board[3][3] = CheckersPiece{ID: blackPieceID, Color: pieceBlack, IsKing: false}
-	game.PiecePositions[whitePieceID] = vector.Vector{X: 4, Y: 4}
-	game.PiecePositions[blackPieceID] = vector.Vector{X: 3, Y: 3}
 
 	originalBlackCount := game.blackPieceCount
 
 	// Execute capture move
-	turn := CheckersTurn{PieceID: 1, Direction: CheckersDirectionLeft}
+	turn := CheckersTurn{PieceCoords: vector.NewVector(4, 4), Direction: CheckersDirectionLeft}
 	game.ExecuteTurn(turn, 1)
 
 	if game.blackPieceCount != originalBlackCount-1 {

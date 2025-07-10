@@ -16,10 +16,9 @@ type CheckersPiece struct {
 }
 
 type CheckersGame struct {
-	GameType        GameType              `json:"game_type"`
-	Board           [8][8]CheckersPiece   `json:"board"`
-	PiecePositions  map[int]vector.Vector `json:"piece_positions"`
-	GameStatus      GameStatus            `json:"game_status"`
+	GameType        GameType            `json:"game_type"`
+	Board           [8][8]CheckersPiece `json:"board"`
+	GameStatus      GameStatus          `json:"game_status"`
 	whitePieceCount int
 	blackPieceCount int
 }
@@ -68,7 +67,6 @@ func NewCheckersGame() *CheckersGame {
 	return &CheckersGame{
 		GameType:        GameTypeCheckers,
 		Board:           board,
-		PiecePositions:  pieces,
 		GameStatus:      GameStatusOngoing,
 		whitePieceCount: 12,
 		blackPieceCount: 12,
@@ -101,12 +99,23 @@ const (
 )
 
 type CheckersTurn struct {
-	PieceID   int               `json:"piece_id"`
-	Direction CheckersDirection `json:"direction"`
+	PieceCoords vector.Vector     `json:"piece_coords"`
+	Direction   CheckersDirection `json:"direction"`
 }
 
 func (turn CheckersTurn) GetGameType() GameType {
 	return GameTypeCheckers
+}
+
+func (game CheckersGame) SquareHasPlayerPiece(cursorPos vector.Vector, playerNum int) bool {
+	square := game.Board[cursorPos.Y][cursorPos.X]
+	playerColor := ""
+	if playerNum == 1 {
+		playerColor = pieceWhite
+	} else {
+		playerColor = pieceBlack
+	}
+	return square.Color == playerColor
 }
 
 // TODO switch this over to returning an error instead of bool + string
@@ -116,20 +125,11 @@ func (game *CheckersGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, 
 		panic("server error - sent a turn not of type checkers turn during checkers game")
 	}
 
-	var truePieceID int
-	if playerNum == 1 {
-		truePieceID = turn.PieceID + 100
-	} else {
-		truePieceID = turn.PieceID + 200
+	if !game.SquareHasPlayerPiece(turn.PieceCoords,playerNum) {
+		return false, fmt.Sprintf("player has no piece at square %v, %v", turn.PieceCoords.Y, turn.PieceCoords.X)
 	}
 
-	//check selected square
-	pieceCoords, ok := game.PiecePositions[truePieceID]
-	if !ok {
-		return false, fmt.Sprintf("no piece found with ID %v", turn.PieceID)
-	}
-
-	piece := game.Board[pieceCoords.Y][pieceCoords.X]
+	piece := game.Board[turn.PieceCoords.Y][turn.PieceCoords.X]
 	if !piece.IsKing {
 		if turn.Direction == CheckersDirectionBackLeft || turn.Direction == CheckersDirectionBackRight {
 			return false, "only kings can move backwards"
@@ -142,7 +142,7 @@ func (game *CheckersGame) ValidateMove(gameTurn GameTurn, playerNum int) (bool, 
 		trueDirection = convertDirectionFromBlackToWhite(trueDirection)
 	}
 
-	targetSquare := applyMove(pieceCoords, trueDirection)
+	targetSquare := applyMove(turn.PieceCoords, trueDirection)
 	if game.isSquareOutOfBounds(targetSquare) {
 		return false, "destination is out of bounds"
 	}
@@ -173,18 +173,7 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string {
 		panic("server error - sent a turn not of type checkers turn during checkers game")
 	}
 
-	var truePieceID int
-	if playerNum == 1 {
-		truePieceID = turn.PieceID + 100
-	} else {
-		truePieceID = turn.PieceID + 200
-	}
-
-	pieceCoords, ok := game.PiecePositions[truePieceID]
-	if !ok {
-		panic("validation was not called before execution, or it failed")
-	}
-	piece := game.Board[pieceCoords.Y][pieceCoords.X]
+	piece := game.Board[turn.PieceCoords.Y][turn.PieceCoords.X]
 
 	//get absolute direction based on input direction and piece color
 	trueDirection := turn.Direction
@@ -192,7 +181,7 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string {
 		trueDirection = convertDirectionFromBlackToWhite(trueDirection)
 	}
 
-	targetSquare := applyMove(pieceCoords, trueDirection)
+	targetSquare := applyMove(turn.PieceCoords, trueDirection)
 	targetPiece := game.Board[targetSquare.Y][targetSquare.X]
 	isOpponentPieceOnDest := targetPiece.Color != "" && targetPiece.Color != piece.Color
 
@@ -217,8 +206,7 @@ func (game *CheckersGame) ExecuteTurn(gameTurn GameTurn, playerNum int) string {
 	}
 
 	game.Board[targetSquare.Y][targetSquare.X] = piece
-	game.Board[pieceCoords.Y][pieceCoords.X] = CheckersPiece{}
-	game.PiecePositions[truePieceID] = targetSquare
+	game.Board[turn.PieceCoords.Y][turn.PieceCoords.X] = CheckersPiece{}
 	game.GameStatus = game.checkGameStatus()
 
 	return msg
@@ -428,7 +416,6 @@ func (game *CheckersGame) capturePiece(targetSquare vector.Vector) {
 	} else {
 		game.blackPieceCount--
 	}
-	delete(game.PiecePositions, targetPiece.ID)
 	game.Board[targetSquare.Y][targetSquare.X] = CheckersPiece{}
 	log.Printf("Capture a piece at %v, %v", targetSquare.X, targetSquare.Y)
 }
