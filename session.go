@@ -611,21 +611,29 @@ func (state *SessionStateInGame) handleCheckersInput(msg tea.KeyMsg, session Ses
 				Type: messages.ClientConcede,
 			})
 		case "up", "k", "w":
-			if state.cursor.Y > 0 {
+			if state.playerNum == 1 && state.cursor.Y > 0 {
 				state.cursor.Y--
-			}
-		case "down", "j", "s":
-			if state.cursor.Y < 7 {
+			} else if state.playerNum == 2 && state.cursor.Y < 7 {
 				state.cursor.Y++
 			}
-		case "left", "h", "a":
-			if state.cursor.X > 0 {
-				state.cursor.X--
+		case "down", "j", "s":
+			if state.playerNum == 1 && state.cursor.Y < 7 {
+				state.cursor.Y++
+			} else if state.playerNum == 2 && state.cursor.Y > 0 {
+				state.cursor.Y--
 			}
-		case "right", "l", "d":
-			if state.cursor.X < 7 {
+		case "left", "h", "a":
+			if state.playerNum == 1 && state.cursor.X > 0 {
+				state.cursor.X--
+			} else if state.playerNum == 2 && state.cursor.X < 7 {
 				state.cursor.X++
 			}
+		case "right", "l", "d":
+			if state.playerNum == 1 && state.cursor.X < 7 {
+				state.cursor.X++
+			} else if state.playerNum == 2 && state.cursor.X > 0 {
+				state.cursor.X--
+			} 
 		case "enter", " ":
 			if !state.game.(*game.CheckersGame).SquareHasPlayerPiece(state.cursor, state.playerNum) {
 				return session, func() tea.Msg {
