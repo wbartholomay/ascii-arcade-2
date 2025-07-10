@@ -633,7 +633,7 @@ func (state *SessionStateInGame) handleCheckersInput(msg tea.KeyMsg, session Ses
 				state.cursor.X++
 			} else if state.playerNum == 2 && state.cursor.X > 0 {
 				state.cursor.X--
-			} 
+			}
 		case "enter", " ":
 			if !state.game.(*game.CheckersGame).SquareHasPlayerPiece(state.cursor, state.playerNum) {
 				return session, func() tea.Msg {
@@ -652,6 +652,7 @@ func (state *SessionStateInGame) handleCheckersInput(msg tea.KeyMsg, session Ses
 			})
 		case "backspace", "escape":
 			state.inMoveSelectMode = false
+			return session, nil
 		case "e":
 			moveDirection = game.CheckersDirectionLeft
 		case "r":
@@ -698,8 +699,14 @@ func (state SessionStateInGame) GetDisplayString() string {
 		playerTurnMsg = "Waiting for opponents move..."
 	}
 	info := infoStyle.Render(fmt.Sprintf("Player: %d | %v", state.playerNum, playerTurnMsg))
-	controls := controlsStyle.Render("WASD/Arrow Keys Move • Enter/Space Select • q/c Concede")
+	var controlStr string
+	if !state.inMoveSelectMode {
+		controlStr = "WASD/Arrow Keys Move • Enter/Space Select • q/c Concede"
+	} else {
+		controlStr = "e Move Left • r Move Right • d Move Back Left • f Move Back Right • Backspace Deselect Square • q/c Concede"
+	}
 
+	controls := controlsStyle.Render(controlStr)
 	return lipgloss.JoinVertical(lipgloss.Left, board, info, controls)
 }
 
@@ -805,7 +812,6 @@ func (state *SessionStateEndGame) HandleUserInput(msg tea.KeyMsg, session Sessio
 }
 
 func (state *SessionStateEndGame) handleServerMessage(session Session, msg messages.ServerMessage) (Session, error) {
-	//TODO
 	switch msg.Type {
 	case messages.ServerRoomJoined:
 		session.playerNumber = msg.PlayerNumber

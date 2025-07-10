@@ -259,6 +259,13 @@ func (game *CheckersGame) checkSurroundingSquaresForCapture(square vector.Vector
 
 func (game *CheckersGame) DisplayBoard(cursorPos vector.Vector, playerNum int) string {
 	// Define styles
+	headerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#6366F1")).
+		Padding(0, 1).
+		MarginBottom(1)
+
 	boardStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#6366F1")).
@@ -281,6 +288,9 @@ func (game *CheckersGame) DisplayBoard(cursorPos vector.Vector, playerNum int) s
 
 	isWhiteTurn := playerNum == 1
 	board := game.Board
+
+	// Create header
+	header := headerStyle.Render("CHECKERS")
 
 	// Create column headers
 	var columnHeaders string
@@ -385,7 +395,7 @@ func (game *CheckersGame) DisplayBoard(cursorPos vector.Vector, playerNum int) s
 	gridWithHeaders := lipgloss.JoinVertical(lipgloss.Left, columnHeaders, result)
 	styledBoard := boardStyle.Render(gridWithHeaders)
 
-	return styledBoard
+	return lipgloss.JoinVertical(lipgloss.Center, header, styledBoard)
 }
 
 func (piece *CheckersPiece) renderPieceSimple() string {
