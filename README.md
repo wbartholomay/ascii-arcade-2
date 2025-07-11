@@ -9,7 +9,34 @@ ASCII Arcade was born from a love of classic board games and the elegance of ter
 
 ## 🚀 Quick Start
 
-### Download the executable: https://github.com/wbartholomay/ascii-arcade-2/blob/main/asciiarcade
+### 📦 Download & Install
+
+**Option 1: Direct Download**
+```bash
+# Download the executable
+wget https://github.com/wbartholomay/ascii-arcade-2/raw/main/asciiarcade
+
+# Make it executable
+chmod +x asciiarcade
+
+# Run the game
+./asciiarcade
+```
+
+**Option 2: Build from Source**
+```bash
+# Clone the repository
+git clone https://github.com/wbartholomay/ascii-arcade-2.git
+
+# Navigate to the project directory
+cd ascii-arcade-2
+
+# Build the project
+go build -o asciiarcade
+
+# Run the game
+./asciiarcade
+```
 
 ## 📖 Usage
 
