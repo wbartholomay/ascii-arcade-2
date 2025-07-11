@@ -1,5 +1,5 @@
 # ASCII ARCADE
-Play your favorite board games with friends, right in your terminal!
+Play your favorite board games with friends, right in your terminal! Currently supports Tic Tac Toe and Checkers, with more to come!
 
 ![Tic Tac Toe Demo](./images/tictactoe-demo.gif)
 
