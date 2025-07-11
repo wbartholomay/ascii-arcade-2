@@ -9,17 +9,7 @@ ASCII Arcade was born from a love of classic board games and the elegance of ter
 
 ## 🚀 Quick Start
 
-### Clone the repository
-
-```bash
-git clone https://github.com/wbartholomay/ascii-arcade-2.git
-```
-
-### Run the client
-
-```bash
-go run .
-```
+### Download the executable: https://github.com/wbartholomay/ascii-arcade-2/blob/main/asciiarcade
 
 ## 📖 Usage
 
