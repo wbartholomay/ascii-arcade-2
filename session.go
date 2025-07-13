@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/wbarthol/ascii-arcade-2/internal/game"
+	"github.com/wbarthol/ascii-arcade-2/pkg/game"
 	"github.com/wbarthol/ascii-arcade-2/internal/messages"
 	"github.com/wbarthol/ascii-arcade-2/internal/vector"
 )

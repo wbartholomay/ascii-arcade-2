@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/wbarthol/ascii-arcade-2/internal/game"
+	"github.com/wbarthol/ascii-arcade-2/pkg/game"
 	"github.com/wbarthol/ascii-arcade-2/internal/messages"
 )
 

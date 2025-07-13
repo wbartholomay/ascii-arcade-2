@@ -1,6 +1,6 @@
 package messages
 
-import "github.com/wbarthol/ascii-arcade-2/internal/game"
+import "github.com/wbarthol/ascii-arcade-2/pkg/game"
 
 type GameResult int
 
