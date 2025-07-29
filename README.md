@@ -12,7 +12,7 @@ ASCII Arcade was born from a love of classic board games and the elegance of ter
 ### 📦 Download & Install
 
 **Option 1: Direct Download**
-See releases: https://github.com/wbartholomay/ascii-arcade-2/releases/tag/v1.0.0
+See releases: ![Releases](https://github.com/wbartholomay/ascii-arcade-2/releases)
 
 **Option 2: Build from Source**
 ```bash
