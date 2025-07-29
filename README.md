@@ -12,16 +12,7 @@ ASCII Arcade was born from a love of classic board games and the elegance of ter
 ### 📦 Download & Install
 
 **Option 1: Direct Download**
-```bash
-# Download the executable
-wget https://github.com/wbartholomay/ascii-arcade-2/raw/main/asciiarcade
-
-# Make it executable
-chmod +x asciiarcade
-
-# Run the game
-./asciiarcade
-```
+See releases: https://github.com/wbartholomay/ascii-arcade-2/releases/tag/v1.0.0
 
 **Option 2: Build from Source**
 ```bash
